@@ -1,0 +1,62 @@
+@import "tailwindcss";
+@source "../../shared/components";
+@config "../tailwind.config.js";
+
+:root {
+  font-family: 'Outfit', system-ui, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+body {
+  margin: 0;
+  display: block;
+  overflow-x: hidden;
+  background-color: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mobile-card {
+  @apply bg-white rounded-[2.5rem] p-6 border border-white/50 shadow-[0_15px_40px_rgba(0,0,0,0.02)] transition-all active:scale-95;
+}
+
+.glass-pill {
+  @apply bg-white/60 backdrop-blur-md border border-white/40 shadow-sm;
+}
+
+.leaflet-container {
+  height: 200px;
+  width: 100%;
+}
+
+@keyframes progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(0); }
+}
+
+.animate-progress {
+  animation: progress 30s linear forwards;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.animate-status-glow {
+  animation: pulse-ring 2s infinite;
+}
+
+/* Premium Leaflet Popup Override */
+.leaflet-popup-content-wrapper {
+  border-radius: 1.5rem !important;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important;
+  padding: 0.25rem !important;
+  border: 1px solid rgba(255,255,255,0.8) !important;
+  background: rgba(255,255,255,0.95) !important;
+  backdrop-filter: blur(12px) !important;
+}
+.leaflet-popup-tip {
+  background: rgba(255,255,255,0.95) !important;
+}

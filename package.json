@@ -1,0 +1,12 @@
+{
+  "name": "safewatch-family-deployment",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "build": "npm --prefix apps/family-app run build",
+    "dev": "npm --prefix apps/family-app run dev"
+  }
+}

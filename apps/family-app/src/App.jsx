@@ -18,14 +18,14 @@ import AuthEntry from '../../shared/components/AuthEntry.jsx';
 import PasswordRecovery from '../../shared/components/PasswordRecovery.jsx';
 import RecoveryLinkConfirm from '../../shared/components/RecoveryLinkConfirm.jsx';
 import AccountAccessDenied from '../../shared/components/AccountAccessDenied.jsx';
-import { 
-  Heart, 
-  Activity, 
-  Battery, 
-  MapPin, 
-  AlertCircle, 
-  ChevronRight, 
-  Settings, 
+import {
+  Heart,
+  Activity,
+  Battery,
+  MapPin,
+  AlertCircle,
+  ChevronRight,
+  Settings,
   Bell,
   Home,
   Shield,
@@ -53,7 +53,7 @@ const EMPTY_SENIOR = { name: 'Loading...', age: '--', gender: '--',
   latestHasGpsFix: false, isInsideSafeZone: false };
 
 const BottomNavItem = ({ icon: Icon, label, active, onClick }) => (
-  <button 
+  <button
     onClick={onClick}
     className={`flex flex-col items-center gap-1 flex-1 transition-all ${active ? 'text-emerald-500' : 'text-slate-400'}`}
   >
@@ -202,7 +202,7 @@ function App({ client } = {}) {
     const highestPriority = familyAlerts[0];
     if (event.key === highestPriority.key) setPopupKey(highestPriority.key);
   }, [familyAlerts, isLoggedIn, now]);
-  
+
   const [telemetry, setTelemetry] = useState(EMPTY_TELEMETRY);
   const [senior, setSenior] = useState(EMPTY_SENIOR);
 
@@ -263,7 +263,7 @@ function App({ client } = {}) {
     const request = ++telemetryRequest.current;
     try {
       {
-        
+
         const { data: telList, error: telError } = await supabase
           .from('telemetry')
           .select('*')
@@ -585,7 +585,7 @@ function App({ client } = {}) {
 const AlertsView = ({ senior, familyAlerts, now, confirmingKey, error, handleAcknowledge, handleDismissAll }) => {
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  
+
   return (
   <div className="px-6 py-8 space-y-8">
     <div className="flex justify-between items-start">
@@ -620,7 +620,7 @@ const AlertsView = ({ senior, familyAlerts, now, confirmingKey, error, handleAck
           <button data-confirm-alert disabled={!!confirmingKey} onClick={handleDismissAll} className="px-4 py-2 bg-slate-800 text-white text-[10px] font-black uppercase rounded-xl hover:bg-slate-900 transition-all">Confirm All</button>
         )}
       </div>
-      
+
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {familyAlerts.length === 0 ? (
         <div className="text-center p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex flex-col items-center gap-3">
@@ -666,10 +666,10 @@ const DashboardView = ({ senior, telemetry, familyAlerts, now, setView, handleSe
   const hasVitals = telemetry.heart_rate !== null && telemetry.heart_rate > 0;
   const healthStatusStr = hasVitals && telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 && telemetry.spo2 >= 95 ? 'Good' : hasVitals ? 'Warning' : 'No Data';
   const healthStatusColor = healthStatusStr === 'Good' ? 'text-emerald-500' : healthStatusStr === 'Warning' ? 'text-orange-500' : 'text-slate-400';
-  
+
   const pulseStatus = !hasVitals ? 'No Data' : telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 ? 'Normal' : 'Warning';
   const pulseStatusColor = pulseStatus === 'Normal' ? 'text-emerald-500' : pulseStatus === 'Warning' ? 'text-orange-500' : 'text-slate-400';
-  
+
   const hasSpo2 = telemetry.spo2 !== null && telemetry.spo2 > 0;
   const spo2Status = !hasSpo2 ? 'No Data' : telemetry.spo2 >= 95 ? 'Normal' : 'Warning';
   const spo2StatusColor = spo2Status === 'Normal' ? 'text-emerald-500' : spo2Status === 'Warning' ? 'text-orange-500' : 'text-slate-400';
@@ -848,16 +848,16 @@ const HealthView = ({ senior, telemetry }) => {
     : pulseStatus === 'Normal'
       ? { bg: 'bg-emerald-50', text: 'text-emerald-500', badgeBg: 'bg-emerald-50/50' }
       : { bg: 'bg-red-50', text: 'text-red-500', badgeBg: 'bg-red-50/50' };
-  
+
   const spo2Status = !hasSpo2 ? 'No Data' : telemetry.spo2 >= 95 ? 'Normal' : 'Warning';
   const spo2Color = !hasSpo2
     ? { bg: 'bg-slate-50', text: 'text-slate-400', badgeBg: 'bg-slate-50/50' }
     : spo2Status === 'Normal'
       ? { bg: 'bg-purple-50', text: 'text-purple-500', badgeBg: 'bg-purple-50/50' }
       : { bg: 'bg-orange-50', text: 'text-orange-500', badgeBg: 'bg-orange-50/50' };
-  
+
   const healthStatusStr = !hasVitals && !hasSpo2 ? 'No Data' : hasVitals && hasSpo2 && telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 && telemetry.spo2 >= 95 ? 'Good' : 'Warning';
-  
+
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
@@ -890,23 +890,23 @@ const HealthView = ({ senior, telemetry }) => {
 
       <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-50 flex flex-col gap-8">
         <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest text-center">Health Overview</h3>
-        
+
         <div className="flex gap-6">
-          <HealthCard 
-            icon={Heart} 
-            label="Pulse Rate" 
-            value={telemetry.heart_rate} 
-            unit="bpm" 
-            status={pulseStatus} 
-            color={pulseColor} 
+          <HealthCard
+            icon={Heart}
+            label="Pulse Rate"
+            value={telemetry.heart_rate}
+            unit="bpm"
+            status={pulseStatus}
+            color={pulseColor}
           />
-          <HealthCard 
-            icon={Activity} 
-            label="Blood Oxygen" 
-            value={telemetry.spo2} 
-            unit="%" 
-            status={spo2Status} 
-            color={spo2Color} 
+          <HealthCard
+            icon={Activity}
+            label="Blood Oxygen"
+            value={telemetry.spo2}
+            unit="%"
+            status={spo2Status}
+            color={spo2Color}
           />
         </div>
       </div>
@@ -919,8 +919,8 @@ const HealthView = ({ senior, telemetry }) => {
           </div>
           <div>
             <p className="text-sm font-bold text-slate-700 leading-relaxed mb-4">
-              {healthStatusStr === 'Good' 
-                ? `Great job! ${senior.name}'s health indicators are within the normal range. Keep it up!` 
+              {healthStatusStr === 'Good'
+                ? `Great job! ${senior.name}'s health indicators are within the normal range. Keep it up!`
                 : `Attention needed! ${senior.name}'s health indicators are outside the normal range. Please check their vitals.`}
             </p>
             <div className="h-px bg-slate-50 w-full mb-4"></div>

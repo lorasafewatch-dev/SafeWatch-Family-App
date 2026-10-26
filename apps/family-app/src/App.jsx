@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SENIOR_AVATAR } from '../../shared/avatar.js';
 import { telemetryTimestamp } from '../../shared/gpsStatus.js';
 import { gpsObservation, retainGpsObservation, loadLastGpsObservation, isLiveFamilyLocation } from '../../shared/gpsLocation.js';
 import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, confirmationErrorMessage, groupAlertIncidents, incidentSnapshot, planAlertSounds, requestFamilySos } from '../../shared/alertLifecycle.js';
@@ -8,6 +9,7 @@ import AlertWarning, { formatDuration } from './components/AlertWarning.jsx';
 import LocationView from './components/LocationView.jsx';
 import ProfileView from './components/ProfileView.jsx';
 import FamilySeniors from './components/FamilySeniors.jsx';
+import SplashScreen from './components/SplashScreen.jsx';
 import { chooseFamilySenior, loadFamilySeniors, seniorManagementError } from '../../shared/familySeniors.js';
 import { getFamilyClient } from './supabaseClient.js';
 import useAccountSession from '../../shared/components/useAccountSession.js';
@@ -16,14 +18,14 @@ import AuthEntry from '../../shared/components/AuthEntry.jsx';
 import PasswordRecovery from '../../shared/components/PasswordRecovery.jsx';
 import RecoveryLinkConfirm from '../../shared/components/RecoveryLinkConfirm.jsx';
 import AccountAccessDenied from '../../shared/components/AccountAccessDenied.jsx';
-import {
-  Heart,
-  Activity,
-  Battery,
-  MapPin,
-  AlertCircle,
-  ChevronRight,
-  Settings,
+import { 
+  Heart, 
+  Activity, 
+  Battery, 
+  MapPin, 
+  AlertCircle, 
+  ChevronRight, 
+  Settings, 
   Bell,
   Home,
   Shield,
@@ -51,7 +53,7 @@ const EMPTY_SENIOR = { name: 'Loading...', age: '--', gender: '--',
   latestHasGpsFix: false, isInsideSafeZone: false };
 
 const BottomNavItem = ({ icon: Icon, label, active, onClick }) => (
-  <button
+  <button 
     onClick={onClick}
     className={`flex flex-col items-center gap-1 flex-1 transition-all ${active ? 'text-emerald-500' : 'text-slate-400'}`}
   >
@@ -77,6 +79,7 @@ const HealthCard = ({ icon: Icon, label, value, unit, status, color }) => (
 function App({ client } = {}) {
   const supabase = client || getFamilyClient();
   const [view, setView] = useState('dashboard');
+  const [startupComplete, setStartupComplete] = useState(false);
   const { isLoggedIn, isLoadingAuth, userId, accountUser, accountPermission, pendingAccess, accessDenied, recoveryAccess, recoveryLink, authLinkError, authNotice, setAuthNotice, authError, retryAuth } = useAccountSession(supabase, 'family');
   const [now, setNow] = useState(Date.now());
   const [familyAlerts, setFamilyAlerts] = useState([]);
@@ -199,7 +202,7 @@ function App({ client } = {}) {
     const highestPriority = familyAlerts[0];
     if (event.key === highestPriority.key) setPopupKey(highestPriority.key);
   }, [familyAlerts, isLoggedIn, now]);
-
+  
   const [telemetry, setTelemetry] = useState(EMPTY_TELEMETRY);
   const [senior, setSenior] = useState(EMPTY_SENIOR);
 
@@ -260,7 +263,7 @@ function App({ client } = {}) {
     const request = ++telemetryRequest.current;
     try {
       {
-
+        
         const { data: telList, error: telError } = await supabase
           .from('telemetry')
           .select('*')
@@ -446,6 +449,10 @@ function App({ client } = {}) {
     };
   }, [isLoggedIn, userId, selectedDeviceId, linkedIdKey]);
 
+  if (!startupComplete) {
+    return <SplashScreen ready={!isLoadingAuth} onComplete={setStartupComplete} />;
+  }
+
   if (isLoadingAuth) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-[#f8fafc]">
@@ -578,7 +585,7 @@ function App({ client } = {}) {
 const AlertsView = ({ senior, familyAlerts, now, confirmingKey, error, handleAcknowledge, handleDismissAll }) => {
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
+  
   return (
   <div className="px-6 py-8 space-y-8">
     <div className="flex justify-between items-start">
@@ -599,7 +606,7 @@ const AlertsView = ({ senior, familyAlerts, now, confirmingKey, error, handleAck
     </div>
 
     <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-50 flex items-center gap-4">
-      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${senior.name}`} className="w-14 h-14 rounded-2xl bg-slate-50" alt="Senior" />
+      <img src={SENIOR_AVATAR} className="w-14 h-14 rounded-2xl bg-slate-50" alt="Senior" />
       <div>
         <p className="text-lg font-black text-slate-800 leading-none">{senior.name}</p>
         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Family Member</p>
@@ -613,7 +620,7 @@ const AlertsView = ({ senior, familyAlerts, now, confirmingKey, error, handleAck
           <button data-confirm-alert disabled={!!confirmingKey} onClick={handleDismissAll} className="px-4 py-2 bg-slate-800 text-white text-[10px] font-black uppercase rounded-xl hover:bg-slate-900 transition-all">Confirm All</button>
         )}
       </div>
-
+      
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {familyAlerts.length === 0 ? (
         <div className="text-center p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex flex-col items-center gap-3">
@@ -659,10 +666,10 @@ const DashboardView = ({ senior, telemetry, familyAlerts, now, setView, handleSe
   const hasVitals = telemetry.heart_rate !== null && telemetry.heart_rate > 0;
   const healthStatusStr = hasVitals && telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 && telemetry.spo2 >= 95 ? 'Good' : hasVitals ? 'Warning' : 'No Data';
   const healthStatusColor = healthStatusStr === 'Good' ? 'text-emerald-500' : healthStatusStr === 'Warning' ? 'text-orange-500' : 'text-slate-400';
-
+  
   const pulseStatus = !hasVitals ? 'No Data' : telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 ? 'Normal' : 'Warning';
   const pulseStatusColor = pulseStatus === 'Normal' ? 'text-emerald-500' : pulseStatus === 'Warning' ? 'text-orange-500' : 'text-slate-400';
-
+  
   const hasSpo2 = telemetry.spo2 !== null && telemetry.spo2 > 0;
   const spo2Status = !hasSpo2 ? 'No Data' : telemetry.spo2 >= 95 ? 'Normal' : 'Warning';
   const spo2StatusColor = spo2Status === 'Normal' ? 'text-emerald-500' : spo2Status === 'Warning' ? 'text-orange-500' : 'text-slate-400';
@@ -742,7 +749,7 @@ const DashboardView = ({ senior, telemetry, familyAlerts, now, setView, handleSe
       <div className="mobile-card relative overflow-hidden !p-8">
         <div className="flex items-center gap-5 mb-8">
           <div className="relative">
-            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${senior.name}`} className="w-20 h-20 rounded-[2.5rem] bg-slate-50 shadow-xl border-4 border-white" alt="Senior" />
+            <img src={SENIOR_AVATAR} className="w-20 h-20 rounded-[2.5rem] bg-slate-50 shadow-xl border-4 border-white" alt="Senior" />
             <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 border-4 border-white rounded-full animate-status-glow"></div>
           </div>
           <div className="flex-1">
@@ -841,16 +848,16 @@ const HealthView = ({ senior, telemetry }) => {
     : pulseStatus === 'Normal'
       ? { bg: 'bg-emerald-50', text: 'text-emerald-500', badgeBg: 'bg-emerald-50/50' }
       : { bg: 'bg-red-50', text: 'text-red-500', badgeBg: 'bg-red-50/50' };
-
+  
   const spo2Status = !hasSpo2 ? 'No Data' : telemetry.spo2 >= 95 ? 'Normal' : 'Warning';
   const spo2Color = !hasSpo2
     ? { bg: 'bg-slate-50', text: 'text-slate-400', badgeBg: 'bg-slate-50/50' }
     : spo2Status === 'Normal'
       ? { bg: 'bg-purple-50', text: 'text-purple-500', badgeBg: 'bg-purple-50/50' }
       : { bg: 'bg-orange-50', text: 'text-orange-500', badgeBg: 'bg-orange-50/50' };
-
+  
   const healthStatusStr = !hasVitals && !hasSpo2 ? 'No Data' : hasVitals && hasSpo2 && telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 && telemetry.spo2 >= 95 ? 'Good' : 'Warning';
-
+  
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
@@ -874,7 +881,7 @@ const HealthView = ({ senior, telemetry }) => {
       </div>
 
       <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-50 flex items-center gap-4">
-        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${senior.name}`} className="w-14 h-14 rounded-2xl bg-slate-50" alt="Senior" />
+        <img src={SENIOR_AVATAR} className="w-14 h-14 rounded-2xl bg-slate-50" alt="Senior" />
         <div>
           <p className="text-lg font-black text-slate-800 leading-none">{senior.name}</p>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Family Member</p>
@@ -883,23 +890,23 @@ const HealthView = ({ senior, telemetry }) => {
 
       <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-50 flex flex-col gap-8">
         <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest text-center">Health Overview</h3>
-
+        
         <div className="flex gap-6">
-          <HealthCard
-            icon={Heart}
-            label="Pulse Rate"
-            value={telemetry.heart_rate}
-            unit="bpm"
-            status={pulseStatus}
-            color={pulseColor}
+          <HealthCard 
+            icon={Heart} 
+            label="Pulse Rate" 
+            value={telemetry.heart_rate} 
+            unit="bpm" 
+            status={pulseStatus} 
+            color={pulseColor} 
           />
-          <HealthCard
-            icon={Activity}
-            label="Blood Oxygen"
-            value={telemetry.spo2}
-            unit="%"
-            status={spo2Status}
-            color={spo2Color}
+          <HealthCard 
+            icon={Activity} 
+            label="Blood Oxygen" 
+            value={telemetry.spo2} 
+            unit="%" 
+            status={spo2Status} 
+            color={spo2Color} 
           />
         </div>
       </div>
@@ -912,8 +919,8 @@ const HealthView = ({ senior, telemetry }) => {
           </div>
           <div>
             <p className="text-sm font-bold text-slate-700 leading-relaxed mb-4">
-              {healthStatusStr === 'Good'
-                ? `Great job! ${senior.name}'s health indicators are within the normal range. Keep it up!`
+              {healthStatusStr === 'Good' 
+                ? `Great job! ${senior.name}'s health indicators are within the normal range. Keep it up!` 
                 : `Attention needed! ${senior.name}'s health indicators are outside the normal range. Please check their vitals.`}
             </p>
             <div className="h-px bg-slate-50 w-full mb-4"></div>

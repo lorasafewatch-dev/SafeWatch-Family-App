@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Calendar, Check, ChevronRight, Clock, Loader2, LogOut, Mail, Pencil, Phone, User } from 'lucide-react';
 import { familyProfileFromUser, saveFamilyProfile } from '../../../shared/familyProfile.js';
+import AccountAuthenticator from '../../../shared/components/AccountAuthenticator.jsx';
 
 const fields = [
   { key: 'fullName', label: 'Full name', icon: User },
@@ -184,6 +185,10 @@ export default function ProfileView({ client, handleLogout, children }) {
       </div>
     </>}
 
+    {user && !loading && !loadError && <div className="mobile-card space-y-4">
+      <h3 className="text-lg font-bold text-slate-800">Account security</h3>
+      <AccountAuthenticator client={client} user={user} onUpdated={() => setRetry(value => value + 1)} />
+    </div>}
     {children}
     <button onClick={handleLogout} disabled={saving} className="w-full py-5 bg-red-50 hover:bg-red-100 border border-red-100 text-red-600 font-black rounded-3xl text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-60">
       <LogOut className="w-4 h-4" /> Sign out

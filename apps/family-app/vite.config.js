@@ -21,7 +21,7 @@ export default defineConfig(({ command, mode }) => {
           short_name: 'SafeWatch',
           description: 'Family Monitoring for Seniors',
           theme_color: '#10B981',
-          background_color: '#ffffff',
+          background_color: '#041C16',
           display: 'standalone',
           icons: [
             {
@@ -36,7 +36,7 @@ export default defineConfig(({ command, mode }) => {
     ],
     server: {
       port: 5173,
-      host: true
+      host: '127.0.0.1'
     }
   }
 })

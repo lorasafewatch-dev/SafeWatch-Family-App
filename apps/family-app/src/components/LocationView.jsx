@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { SENIOR_AVATAR } from '../../../shared/avatar.js';
+import { createSeniorMarker } from '../../../shared/mapMarker.js';
 import 'leaflet/dist/leaflet.css';
 import { Battery, Calendar, Clock, MapPin, Maximize2, Shield } from 'lucide-react';
 import { isLiveFamilyLocation, locationAge } from '../../../shared/gpsLocation.js';
@@ -41,9 +43,9 @@ export default function LocationView({ senior, telemetry, now }) {
   // Fit once on mount. Packet updates and the clock never control the camera.
   const [initialBounds] = useState(() => [...SAN_ISIDRO_EAST_BOUNDARY, ...(position ? [position] : [])]);
   const icon = useMemo(() => L.divIcon({
-    html: `<div style="width:48px;height:48px;border:4px solid ${live ? (inside ? '#10b981' : '#ef4444') : '#d97706'};border-radius:50%;background:white;box-shadow:0 4px 12px #0003;overflow:hidden"><img alt="" src="https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(senior.name || 'Watch')}" style="width:100%;height:100%" /></div>`,
+    html: createSeniorMarker({ live, inside }),
     className: 'family-location-marker', iconSize: [48, 48], iconAnchor: [24, 24], popupAnchor: [0, -24],
-  }), [senior.name, live, inside]);
+  }), [live, inside]);
   const date = new Date(now);
 
   return <div className="flex flex-col px-6 py-8 gap-6 relative">
@@ -59,7 +61,7 @@ export default function LocationView({ senior, telemetry, now }) {
     </div>
 
     <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-50 flex items-center gap-4">
-      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(senior.name || 'Watch')}`} className="w-14 h-14 rounded-2xl bg-slate-50" alt="Family member" />
+      <img src={SENIOR_AVATAR} className="w-14 h-14 rounded-2xl bg-slate-50" alt="Family member" />
       <div>
         <p className="text-lg font-black text-slate-800">{senior.name}</p>
         <p className={`text-xs font-bold mt-1 ${live ? 'text-emerald-700' : 'text-amber-700'}`}>{status}</p>

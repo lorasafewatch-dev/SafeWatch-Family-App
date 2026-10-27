@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from 'react-leaflet';
+import { useMemo, useState } from 'react';
+import { MapContainer, Marker, Popup, Polygon, useMap } from 'react-leaflet';
+import { SafeWatchTiles } from '../../../shared/components/SafeWatchMap.jsx';
 import L from 'leaflet';
 import { SENIOR_AVATAR } from '../../../shared/avatar.js';
 import { createSeniorMarker } from '../../../shared/mapMarker.js';
@@ -11,12 +12,6 @@ import { SAN_ISIDRO_EAST_BOUNDARY, isInsidePolygon } from '../../../shared/safeZ
 
 function MapControls({ position }) {
   const map = useMap();
-  useEffect(() => {
-    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }));
-    observer.observe(map.getContainer());
-    return () => observer.disconnect();
-  }, [map]);
-
   return <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
     <button disabled={!position} onClick={() => {
       map.stop();
@@ -74,7 +69,7 @@ export default function LocationView({ senior, telemetry, now }) {
 
     <section aria-label="Family location map" className="h-[420px] sm:h-[500px] shrink-0 relative rounded-[2rem] overflow-hidden shadow-lg border border-white bg-slate-100 z-0">
       <MapContainer bounds={initialBounds} boundsOptions={{ padding: [24, 24], maxZoom: 15 }} className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
+        <SafeWatchTiles />
         <Polygon positions={SAN_ISIDRO_EAST_BOUNDARY} pathOptions={{ color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.10, weight: 3 }}>
           <Popup>San Isidro East safe-zone boundary</Popup>
         </Polygon>

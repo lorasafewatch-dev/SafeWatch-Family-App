@@ -20,8 +20,8 @@ export default defineConfig(({ command, mode }) => {
           name: 'SafeWatch Family App',
           short_name: 'SafeWatch',
           description: 'Family Monitoring for Seniors',
-          theme_color: '#10B981',
-          background_color: '#041C16',
+          theme_color: '#edf8ef',
+          background_color: '#edf8ef',
           display: 'standalone',
           icons: [
             {

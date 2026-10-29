@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { SENIOR_AVATAR } from '../../shared/avatar.js';
 import { telemetryTimestamp } from '../../shared/gpsStatus.js';
-import { gpsObservation, retainGpsObservation, loadLastGpsObservation, isLiveFamilyLocation } from '../../shared/gpsLocation.js';
+import { gpsObservation, retainGpsObservation, loadLastGpsObservation } from '../../shared/gpsLocation.js';
 import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, confirmationErrorMessage, groupAlertIncidents, incidentSnapshot, planAlertSounds, requestFamilySos } from '../../shared/alertLifecycle.js';
 import { enableAlertSounds, playAlertSound, stopAlertSounds } from '../../shared/alertSound.js';
 import { isInsidePolygon } from '../../shared/safeZone.js';
 import AlertWarning, { formatDuration } from './components/AlertWarning.jsx';
 import LocationView from './components/LocationView.jsx';
 import ProfileView from './components/ProfileView.jsx';
+import DashboardView from './components/FamilyHome.jsx';
+import HealthView from './components/FamilyHealth.jsx';
+import AlertsView from './components/FamilyAlerts.jsx';
+import { FamilyBrand, FamilyNavigation, SeniorSelector } from './components/FamilyNatureUI.jsx';
 import FamilySeniors from './components/FamilySeniors.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
 import { chooseFamilySenior, loadFamilySeniors, seniorManagementError } from '../../shared/familySeniors.js';
@@ -19,33 +22,7 @@ import PrivacyTermsGate from '../../shared/components/PrivacyTermsGate.jsx';
 import PasswordRecovery from '../../shared/components/PasswordRecovery.jsx';
 import RecoveryLinkConfirm from '../../shared/components/RecoveryLinkConfirm.jsx';
 import AccountAccessDenied from '../../shared/components/AccountAccessDenied.jsx';
-import {
-  Heart,
-  Activity,
-  Battery,
-  MapPin,
-  AlertCircle,
-  ChevronRight,
-  Settings,
-  Bell,
-  Home,
-  Shield,
-  Search,
-  Eye,
-  EyeOff,
-  User,
-  Lock,
-  Mail,
-  Calendar,
-  Clock,
-  MoreHorizontal,
-  Sun,
-  ShieldCheck,
-  Send,
-  Loader2,
-  ChevronLeft,
-  LogOut
-} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const EMPTY_TELEMETRY = { heart_rate: null, spo2: null, battery_percent: null,
   is_sos: false, location: null, created_at: null };
@@ -53,33 +30,10 @@ const EMPTY_SENIOR = { name: 'Loading...', age: '--', gender: '--',
   location: 'No GPS location recorded', position: null, positionAt: null,
   latestHasGpsFix: false, isInsideSafeZone: false };
 
-const BottomNavItem = ({ icon: Icon, label, active, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`flex flex-col items-center gap-1 flex-1 transition-all ${active ? 'text-emerald-500' : 'text-slate-400'}`}
-  >
-    <Icon className={`w-6 h-6 ${active ? 'fill-emerald-50' : ''}`} />
-    <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-  </button>
-);
-
-const HealthCard = ({ icon: Icon, label, value, unit, status, color }) => (
-  <div className="mobile-card flex flex-col items-center text-center flex-1 !p-8">
-    <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-4 ${color.bg} shadow-sm`}>
-      <Icon className={`w-8 h-8 ${color.text}`} />
-    </div>
-    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{label}</p>
-    <div className="flex items-baseline gap-1">
-      <span className="text-3xl font-black text-slate-800">{value}</span>
-      <span className="text-sm font-bold text-slate-400">{unit}</span>
-    </div>
-    <span className={`text-[10px] font-black px-4 py-1.5 rounded-full uppercase mt-4 ${color.badgeBg} ${color.text} border border-white/50 shadow-sm`}>{status}</span>
-  </div>
-);
-
 function App({ client } = {}) {
   const supabase = client || getFamilyClient();
   const [view, setView] = useState('dashboard');
+  const contentRef = React.useRef(null);
   const [startupComplete, setStartupComplete] = useState(false);
   const { isLoggedIn, isLoadingAuth, userId, accountUser, accountPermission, pendingAccess, accessDenied, recoveryAccess, recoveryLink, authLinkError, authNotice, setAuthNotice, authError, retryAuth, privacyRequired, privacyError } = useAccountSession(supabase, 'family');
   const [now, setNow] = useState(Date.now());
@@ -92,6 +46,7 @@ function App({ client } = {}) {
   const [sosError, setSosError] = useState('');
   const [linkedSeniors, setLinkedSeniors] = useState([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+  useEffect(() => { contentRef.current?.scrollTo({ top: 0, behavior: 'auto' }); }, [view, selectedDeviceId]);
   const [seniorListLoading, setSeniorListLoading] = useState(true);
   const [seniorListError, setSeniorListError] = useState('');
   const seniorListRequest = React.useRef(0);
@@ -507,21 +462,21 @@ function App({ client } = {}) {
     }
     switch (view) {
       case 'dashboard':
-        return <DashboardView now={now} senior={senior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} handleSendSOS={handleSendSOS} sendingSos={sendingSos} sosError={sosError} />;
+        return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} handleSendSOS={handleSendSOS} sendingSos={sendingSos} sosError={sosError} />;
       case 'location':
-        return <LocationView key={senior.deviceId || 'waiting'} senior={senior} telemetry={telemetry} now={now} />;
+        return <LocationView key={senior.deviceId || 'waiting'} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} disabled={sendingSos} telemetry={telemetry} now={now} />;
       case 'health':
-        return <HealthView senior={senior} telemetry={telemetry} />;
+        return <HealthView senior={senior} telemetry={telemetry} now={now} />;
       case 'alerts':
         return <AlertsView senior={senior} familyAlerts={familyAlerts} now={now} confirmingKey={confirmingKey} error={alertError} handleAcknowledge={handleAcknowledgeAlert} handleDismissAll={handleDismissAll} />;
       case 'profile':
-        return <ProfileView client={supabase} handleLogout={handleLogout}>
+        return <div className="nature-account"><ProfileView client={supabase} handleLogout={handleLogout}>
           <FamilySeniors client={supabase} seniors={linkedSeniors} selectedDeviceId={selectedDeviceId}
             loading={seniorListLoading} loadError={seniorListError} onReload={() => fetchLinkedSeniors(undefined, true)}
             onSelect={id => selectSenior(id)} onChanged={id => fetchLinkedSeniors(id, true)} />
-        </ProfileView>;
+        </ProfileView></div>;
       default:
-        return <DashboardView now={now} senior={senior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} handleSendSOS={handleSendSOS} sendingSos={sendingSos} sosError={sosError} />;
+        return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} handleSendSOS={handleSendSOS} sendingSos={sendingSos} sosError={sosError} />;
     }
   };
 
@@ -530,13 +485,8 @@ function App({ client } = {}) {
   const clock = alertClock(activeAlert, now);
 
   return (
-    <div className="h-screen w-full bg-[#f8fafc] flex flex-col overflow-hidden font-sans text-slate-800 relative">
-      {/* Background Mesh Gradient */}
-      <div className="absolute inset-0 z-0 opacity-50 pointer-events-none">
-        <div className="absolute top-[-5%] right-[-10%] w-[60%] h-[40%] rounded-full bg-emerald-100 blur-[120px]"></div>
-        <div className="absolute bottom-[20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-50 blur-[100px]"></div>
-      </div>
-
+    <div className="family-nature">
+      <div className="nature-background" aria-hidden="true"/>
       {activeAlert && !popupAlert && (
         <div className="relative z-[2001] bg-orange-50 border-b border-orange-200 px-5 py-4">
           <button onClick={() => setPopupKey(activeAlert.key)} className="w-full text-left text-sm font-bold text-orange-900">
@@ -547,393 +497,18 @@ function App({ client } = {}) {
           {soundsBlocked && <button onClick={unlockSounds} className="text-xs font-bold underline mt-2">Enable alert sounds</button>}
         </div>
       )}
-
-      {/* Mobile Frame Container */}
-      <div className="flex-1 overflow-y-auto pb-28 relative z-10">
-        {view !== 'profile' && seniorListError && <p role="alert" className="mx-6 mt-6 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">{seniorListError}</p>}
-        {view !== 'profile' && linkedSeniors.length > 0 && <div className="mx-6 mt-6 rounded-2xl bg-white p-4 border border-emerald-100 flex flex-wrap items-center gap-3">
-          <label htmlFor="active-family-senior" className="text-xs font-bold text-slate-600">Senior to monitor</label>
-          <select id="active-family-senior" value={selectedDeviceId || ''} disabled={sendingSos}
-            onChange={event => selectSenior(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700">
-            {linkedSeniors.map(device => <option key={device.id} value={device.id}>{device.patient_name}</option>)}
-          </select>
-          <button onClick={() => setView('profile')} className="text-xs font-bold text-emerald-700 underline">Manage seniors</button>
-        </div>}
+      <main className="nature-content" ref={contentRef}>
+        <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length}/>
+        {view !== 'profile' && seniorListError && <p role="alert" className="nature-notice">{seniorListError}</p>}
+        {!['dashboard', 'location', 'profile'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} disabled={sendingSos} compact/></div>}
         {renderView()}
-      </div>
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 h-24 bg-white/80 backdrop-blur-2xl border-t border-white/50 px-6 flex items-center justify-between z-[2000] pb-2 shadow-[0_-10px_40px_rgba(0,0,0,0.03)]">
-        <BottomNavItem icon={Home} label="Home" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
-        <BottomNavItem icon={MapPin} label="Location" active={view === 'location'} onClick={() => setView('location')} />
-        <div className="relative -top-6">
-          <button onClick={() => setView('health')} className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-500/30 border-4 border-white hover:bg-emerald-600 transition-colors animate-status-glow">
-            <Heart className="w-7 h-7 fill-current" />
-          </button>
-        </div>
-        <BottomNavItem icon={Bell} label="Alerts" active={view === 'alerts'} onClick={() => setView('alerts')} />
-        <BottomNavItem icon={User} label="Profile" active={view === 'profile'} onClick={() => setView('profile')} />
-      </nav>
-
+      </main>
+      <FamilyNavigation view={view} setView={setView}/>
       <AlertWarning incident={popupAlert} now={now} onConfirm={handleAcknowledgeAlert}
         onMinimize={() => setPopupKey(null)} busy={!!confirmingKey} error={alertError}
-        soundsBlocked={soundsBlocked} onEnableSounds={unlockSounds} />
+        soundsBlocked={soundsBlocked} onEnableSounds={unlockSounds}/>
     </div>
   );
 }
-
-// --- Views ---
-
-const AlertsView = ({ senior, familyAlerts, now, confirmingKey, error, handleAcknowledge, handleDismissAll }) => {
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-  return (
-  <div className="px-6 py-8 space-y-8">
-    <div className="flex justify-between items-start">
-      <div>
-        <h2 className="text-3xl font-black text-slate-800 tracking-tight leading-none mb-2">Alerts</h2>
-        <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Stay informed about your loved one's health and device status.</p>
-      </div>
-      <div className="flex flex-col items-end gap-2">
-        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm">
-          <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-          <span className="text-[10px] font-bold text-slate-500 uppercase whitespace-nowrap">{dateStr}</span>
-        </div>
-        <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 shadow-sm">
-          <Clock className="w-3.5 h-3.5 text-emerald-600" />
-          <span className="text-[10px] font-black text-emerald-600 uppercase whitespace-nowrap">{timeStr}</span>
-        </div>
-      </div>
-    </div>
-
-    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-50 flex items-center gap-4">
-      <img src={SENIOR_AVATAR} className="w-14 h-14 rounded-2xl bg-slate-50" alt="Senior" />
-      <div>
-        <p className="text-lg font-black text-slate-800 leading-none">{senior.name}</p>
-        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Family Member</p>
-      </div>
-    </div>
-
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest">Pending Alerts</h3>
-        {familyAlerts.length > 0 && (
-          <button data-confirm-alert disabled={!!confirmingKey} onClick={handleDismissAll} className="px-4 py-2 bg-slate-800 text-white text-[10px] font-black uppercase rounded-xl hover:bg-slate-900 transition-all">Confirm All</button>
-        )}
-      </div>
-
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      {familyAlerts.length === 0 ? (
-        <div className="text-center p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex flex-col items-center gap-3">
-          <ShieldCheck className="w-8 h-8 text-emerald-400" />
-          <p className="text-slate-400 font-bold text-sm uppercase tracking-wider">No Pending Alerts</p>
-        </div>
-      ) : (
-        familyAlerts.map(alert => (
-          <div key={alert.key} className="bg-red-50/30 p-6 rounded-[2.5rem] border border-red-50 flex items-center justify-between group transition-all mb-4">
-            <div className="flex items-center gap-6">
-              <div className="w-14 h-14 bg-white text-red-500 rounded-2xl flex items-center justify-center shadow-sm">
-                {alert.alert_type === 'SOS' ? <AlertCircle className="w-6 h-6 fill-current" /> : <MapPin className="w-6 h-6" />}
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{alert.alert_type} Alert</p>
-                <p className="text-base font-black text-slate-800 leading-none mb-2">{alert.alert_type === 'SOS' ? 'SOS Button Pressed' : 'Left Safe Zone'}</p>
-                <p className="text-[10px] text-slate-500 font-medium mb-2">Unconfirmed for {formatDuration(alertClock(alert, now).elapsedSeconds)} · {alertClock(alert, now).escalated ? 'Barangay attention required' : `${formatDuration(alertClock(alert, now).remainingSeconds)} remaining`}</p>
-                <p className="text-[10px] text-slate-500 mb-2">Latest update: {new Date(alert.details.last_seen_at).toLocaleTimeString()}</p>
-                <button data-confirm-alert disabled={!!confirmingKey} onClick={() => handleAcknowledge(alert)} className="text-xs font-bold text-orange-700 underline disabled:opacity-50">Confirm I have checked</button>
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">
-                  {new Date(alert.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric' })}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-2.5 h-2.5 bg-red-500 rounded-full shadow-[0_0_12px_rgba(239,68,68,0.5)] animate-pulse"></div>
-              <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-red-500 transition-all" />
-            </div>
-          </div>
-        ))
-      )}
-    </div>
-  </div>
-  );
-};
-
-const DashboardView = ({ senior, telemetry, familyAlerts, now, setView, handleSendSOS, sendingSos, sosError }) => {
-  const hasFreshGps = isLiveFamilyLocation(senior, now);
-  const isSafe = hasFreshGps && senior.isInsideSafeZone && !telemetry.is_sos && familyAlerts.length === 0;
-  const zoneLabel = telemetry.is_sos ? 'SOS emergency' : hasFreshGps ? (senior.isInsideSafeZone ? 'Inside Safe Zone' : 'Outside Safe Zone') : 'No current GPS fix';
-  const statusLabel = telemetry.is_sos || familyAlerts.length ? 'Alert' : hasFreshGps ? (isSafe ? 'Safe' : 'Outside') : 'Waiting';
-  const activeAlertsCount = familyAlerts.length;
-  const hasVitals = telemetry.heart_rate !== null && telemetry.heart_rate > 0;
-  const healthStatusStr = hasVitals && telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 && telemetry.spo2 >= 95 ? 'Good' : hasVitals ? 'Warning' : 'No Data';
-  const healthStatusColor = healthStatusStr === 'Good' ? 'text-emerald-500' : healthStatusStr === 'Warning' ? 'text-orange-500' : 'text-slate-400';
-
-  const pulseStatus = !hasVitals ? 'No Data' : telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 ? 'Normal' : 'Warning';
-  const pulseStatusColor = pulseStatus === 'Normal' ? 'text-emerald-500' : pulseStatus === 'Warning' ? 'text-orange-500' : 'text-slate-400';
-
-  const hasSpo2 = telemetry.spo2 !== null && telemetry.spo2 > 0;
-  const spo2Status = !hasSpo2 ? 'No Data' : telemetry.spo2 >= 95 ? 'Normal' : 'Warning';
-  const spo2StatusColor = spo2Status === 'Normal' ? 'text-emerald-500' : spo2Status === 'Warning' ? 'text-orange-500' : 'text-slate-400';
-
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-  return (
-    <div className="px-6 py-8 space-y-8">
-      {/* App Header */}
-      <div className="flex justify-between items-start">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
-            <ShieldCheck className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-black text-emerald-600 tracking-tight leading-none uppercase">SAFEWATCH</h1>
-            <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Family Monitoring for Seniors</p>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm">
-            <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase whitespace-nowrap">{dateStr}</span>
-          </div>
-          <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 shadow-sm">
-            <Clock className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="text-[10px] font-black text-emerald-600 uppercase whitespace-nowrap">{timeStr}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Greeting */}
-      <div>
-        <div className="flex items-center gap-2">
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight leading-none">
-            {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}!
-          </h2>
-          <Sun className="w-6 h-6 text-yellow-400" />
-        </div>
-        <p className="text-xs text-slate-400 font-medium mt-1">Here's the latest update on <strong>{senior.name}</strong>.</p>
-      </div>
-
-      {/* Quick Stats Grid */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center text-center">
-          <div className={`w-10 h-10 ${isSafe ? 'bg-blue-50 text-blue-500' : 'bg-red-50 text-red-500'} rounded-2xl flex items-center justify-center mb-3`}>
-            <Shield className="w-5 h-5 fill-current" />
-          </div>
-          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-tight">{zoneLabel}</p>
-          <p className={`text-[10px] font-black uppercase mt-1 ${isSafe ? 'text-emerald-500' : 'text-red-500'}`}>{statusLabel}</p>
-          <button onClick={() => setView('location')} className="text-[8px] font-black text-blue-500 uppercase mt-2 flex items-center gap-0.5">View Location <ChevronRight className="w-2.5 h-2.5" /></button>
-        </div>
-
-        <div className="bg-white p-4 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center text-center">
-          <div className="w-10 h-10 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-3">
-            <Bell className="w-5 h-5" />
-          </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-lg font-black text-slate-800">{activeAlertsCount}</span>
-          </div>
-          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-tight">Active Alerts</p>
-          <button onClick={() => setView('alerts')} className="text-[8px] font-black text-red-500 uppercase mt-2 flex items-center gap-0.5">View Alerts <ChevronRight className="w-2.5 h-2.5" /></button>
-        </div>
-
-        <div className="bg-white p-4 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center text-center">
-          <div className="w-10 h-10 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center mb-3">
-            <Heart className="w-5 h-5" />
-          </div>
-          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-tight">Health Status</p>
-          <p className={`text-[10px] font-black uppercase mt-1 ${healthStatusColor}`}>{healthStatusStr}</p>
-          <button onClick={() => setView('health')} className="text-[8px] font-black text-purple-500 uppercase mt-2 flex items-center gap-0.5">View Health <ChevronRight className="w-2.5 h-2.5" /></button>
-        </div>
-      </div>
-
-      {/* Senior Profile Card */}
-      <div className="mobile-card relative overflow-hidden !p-8">
-        <div className="flex items-center gap-5 mb-8">
-          <div className="relative">
-            <img src={SENIOR_AVATAR} className="w-20 h-20 rounded-[2.5rem] bg-slate-50 shadow-xl border-4 border-white" alt="Senior" />
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 border-4 border-white rounded-full animate-status-glow"></div>
-          </div>
-          <div className="flex-1">
-            <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-none">{senior.name}</h3>
-            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mt-2">Age: {senior.age} • {senior.gender}</p>
-            <div className="flex items-center gap-1.5 mt-3">
-              <MapPin className="w-3.5 h-3.5 text-emerald-500" />
-              <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-tight">{!hasFreshGps && senior.position ? 'Last known: ' : ''}{senior.location}</p>
-            </div>
-          </div>
-          <div className={`px-4 py-2 ${isSafe ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'} rounded-2xl flex items-center gap-1.5 shrink-0 border shadow-sm animate-status-glow`}>
-            {isSafe ? <Shield className="w-3.5 h-3.5 fill-current" /> : <AlertCircle className="w-3.5 h-3.5 fill-current" />}
-            <span className="text-[9px] font-black uppercase tracking-wider">{statusLabel}</span>
-          </div>
-        </div>
-
-        {/* Vital Stats */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5">
-              <Heart className="w-3 h-3 text-red-500" />
-              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Pulse Rate</span>
-            </div>
-            <p className="text-lg font-black text-slate-800 tracking-tight leading-none">{telemetry.heart_rate || '--'} <span className="text-[8px] text-slate-400 uppercase font-bold">{telemetry.heart_rate ? 'bpm' : ''}</span></p>
-            <span className={`text-[8px] font-black uppercase ${pulseStatusColor}`}>{pulseStatus}</span>
-          </div>
-
-          <div className="space-y-1 border-l border-slate-50 pl-3">
-            <div className="flex items-center gap-1.5">
-              <Activity className="w-3 h-3 text-blue-500" />
-              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Blood Oxygen</span>
-            </div>
-            <p className="text-lg font-black text-slate-800 tracking-tight leading-none">{telemetry.spo2 || '--'} <span className="text-[8px] text-slate-400 uppercase font-bold">{telemetry.spo2 ? '%' : ''}</span></p>
-            <span className={`text-[8px] font-black uppercase ${spo2StatusColor}`}>{spo2Status}</span>
-          </div>
-
-          <div className="space-y-1 border-l border-slate-50 pl-3">
-            <div className="flex items-center gap-1.5">
-              <Battery className="w-3 h-3 text-orange-400" />
-              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Battery Status</span>
-            </div>
-            <p className="text-lg font-black text-slate-800 tracking-tight leading-none">{telemetry.battery_percent ?? '--'} <span className="text-[8px] text-slate-400 uppercase font-bold">{telemetry.battery_percent !== null ? '%' : ''}</span></p>
-            <span className={`text-[8px] font-black uppercase ${telemetry.battery_percent === null ? 'text-slate-400' : telemetry.battery_percent >= 20 ? 'text-emerald-500' : 'text-red-500'}`}>{telemetry.battery_percent === null ? 'No Data' : telemetry.battery_percent >= 20 ? 'Good' : 'Low'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation Buttons */}
-      <div className="space-y-3">
-        <button onClick={() => setView('location')} className="w-full bg-white p-5 rounded-3xl shadow-sm border border-slate-50 flex items-center justify-between group hover:bg-slate-50 transition-all">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center">
-              <MapPin className="w-5 h-5" />
-            </div>
-            <span className="text-sm font-black text-slate-800 uppercase tracking-widest">View Live Location</span>
-          </div>
-          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-emerald-500 transition-all" />
-        </button>
-
-        <div className="bg-red-50 p-6 rounded-[2.5rem] border border-red-100 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white text-red-500 rounded-2xl flex items-center justify-center shadow-sm">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-black text-red-600 uppercase tracking-widest leading-none">Emergency</p>
-              <p className="text-[8px] text-red-400 font-bold mt-1 max-w-[150px]">In case of emergency, you can send an SOS alert that will notify your BHW.</p>
-            </div>
-          </div>
-          <button onClick={handleSendSOS} disabled={sendingSos} className="px-4 py-3 bg-red-500 text-white font-black text-[10px] rounded-xl uppercase tracking-widest shadow-lg shadow-red-500/20 flex items-center gap-2 disabled:opacity-50">
-            <Send className="w-3 h-3" /> {sendingSos ? 'Sending…' : 'Send SOS Alert'}
-          </button>
-        </div>
-        {sosError && <p role="alert" className="text-sm text-red-700">{sosError}</p>}
-
-        <div className="bg-emerald-50 p-6 rounded-[2.5rem] border border-emerald-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-white text-emerald-500 rounded-2xl flex items-center justify-center shadow-sm shrink-0">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm font-black text-emerald-600 uppercase tracking-widest leading-none">Peace of Mind, Always</p>
-            <p className="text-[8px] text-emerald-400 font-bold mt-1">We're here to help you keep your loved one safe and healthy. Our BHW team is ready to assist.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const HealthView = ({ senior, telemetry }) => {
-  const hasVitals = telemetry.heart_rate !== null && telemetry.heart_rate > 0;
-  const hasSpo2 = telemetry.spo2 !== null && telemetry.spo2 > 0;
-  const pulseStatus = !hasVitals ? 'No Data' : telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 ? 'Normal' : 'Warning';
-  const pulseColor = !hasVitals
-    ? { bg: 'bg-slate-50', text: 'text-slate-400', badgeBg: 'bg-slate-50/50' }
-    : pulseStatus === 'Normal'
-      ? { bg: 'bg-emerald-50', text: 'text-emerald-500', badgeBg: 'bg-emerald-50/50' }
-      : { bg: 'bg-red-50', text: 'text-red-500', badgeBg: 'bg-red-50/50' };
-
-  const spo2Status = !hasSpo2 ? 'No Data' : telemetry.spo2 >= 95 ? 'Normal' : 'Warning';
-  const spo2Color = !hasSpo2
-    ? { bg: 'bg-slate-50', text: 'text-slate-400', badgeBg: 'bg-slate-50/50' }
-    : spo2Status === 'Normal'
-      ? { bg: 'bg-purple-50', text: 'text-purple-500', badgeBg: 'bg-purple-50/50' }
-      : { bg: 'bg-orange-50', text: 'text-orange-500', badgeBg: 'bg-orange-50/50' };
-
-  const healthStatusStr = !hasVitals && !hasSpo2 ? 'No Data' : hasVitals && hasSpo2 && telemetry.heart_rate >= 60 && telemetry.heart_rate <= 100 && telemetry.spo2 >= 95 ? 'Good' : 'Warning';
-
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-  return (
-    <div className="px-6 py-8 space-y-8 flex flex-col h-full">
-      <div className="flex justify-between items-start">
-        <div>
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight leading-none mb-2">Health</h2>
-          <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">View your family member's health overview.</p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm">
-            <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase whitespace-nowrap">{dateStr}</span>
-          </div>
-          <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 shadow-sm">
-            <Clock className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="text-[10px] font-black text-emerald-600 uppercase whitespace-nowrap">{timeStr}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-50 flex items-center gap-4">
-        <img src={SENIOR_AVATAR} className="w-14 h-14 rounded-2xl bg-slate-50" alt="Senior" />
-        <div>
-          <p className="text-lg font-black text-slate-800 leading-none">{senior.name}</p>
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Family Member</p>
-        </div>
-      </div>
-
-      <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-50 flex flex-col gap-8">
-        <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest text-center">Health Overview</h3>
-
-        <div className="flex gap-6">
-          <HealthCard
-            icon={Heart}
-            label="Pulse Rate"
-            value={telemetry.heart_rate}
-            unit="bpm"
-            status={pulseStatus}
-            color={pulseColor}
-          />
-          <HealthCard
-            icon={Activity}
-            label="Blood Oxygen"
-            value={telemetry.spo2}
-            unit="%"
-            status={spo2Status}
-            color={spo2Color}
-          />
-        </div>
-      </div>
-
-      <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-50 space-y-6 flex-1">
-        <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest">Health Insights</h3>
-        <div className="flex items-start gap-6">
-          <div className="w-16 h-16 bg-emerald-500 rounded-[2rem] flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
-            <ShieldCheck className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-slate-700 leading-relaxed mb-4">
-              {healthStatusStr === 'Good'
-                ? `Great job! ${senior.name}'s health indicators are within the normal range. Keep it up!`
-                : `Attention needed! ${senior.name}'s health indicators are outside the normal range. Please check their vitals.`}
-            </p>
-            <div className="h-px bg-slate-50 w-full mb-4"></div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">System Status: <span className={healthStatusStr === 'Good' ? 'text-emerald-500' : 'text-orange-500'}>{healthStatusStr === 'Good' ? 'All Good' : 'Warning'}</span></p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
 
 export default App;

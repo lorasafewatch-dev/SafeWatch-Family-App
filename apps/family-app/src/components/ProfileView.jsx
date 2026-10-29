@@ -92,7 +92,7 @@ export default function ProfileView({ client, handleLogout, children }) {
     }
   };
 
-  return <section className="px-6 py-8 space-y-8">
+  return <section className="nature-profile px-6 py-8 space-y-8">
     <div className="flex justify-between items-start gap-4">
       <div>
         <h2 className="text-3xl font-black text-slate-800 tracking-tight leading-none mb-2">My Profile</h2>
@@ -116,16 +116,16 @@ export default function ProfileView({ client, handleLogout, children }) {
       <p role="alert" className="text-sm text-red-700">{loadError}</p>
       <button onClick={() => setRetry(value => value + 1)} className="font-bold text-sm text-emerald-700 underline">Retry loading profile</button>
     </div> : <>
-      <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-50 flex flex-wrap items-center gap-5">
+      <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-50 grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-x-4 gap-y-5">
         <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-3xl flex items-center justify-center shrink-0">
           <User className="w-8 h-8" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xl font-black text-slate-800 leading-tight break-words">{profile.fullName || 'Family member'}</p>
-          <p className="text-xs text-slate-500 mt-2 break-all">{profile.email}</p>
-          <p className="text-xs text-slate-500 mt-1">{profile.phoneNumber || 'No phone number added'}</p>
+          <p className="text-xl font-black text-slate-800 leading-tight [overflow-wrap:anywhere]">{profile.fullName || 'Family member'}</p>
+          <p className="text-xs text-slate-500 mt-2 [overflow-wrap:anywhere]">{profile.email}</p>
+          <p className="text-xs text-slate-500 mt-1 [overflow-wrap:anywhere]">{profile.phoneNumber || 'No phone number added'}</p>
         </div>
-        {!editing && <button onClick={() => edit()} className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
+        {!editing && <button onClick={() => edit()} className="col-span-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
           <Pencil className="w-4 h-4" /> Edit profile
         </button>}
       </div>
@@ -176,7 +176,7 @@ export default function ProfileView({ client, handleLogout, children }) {
               <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center shrink-0"><Icon className="w-6 h-6" /></div>
               <div className="min-w-0">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-                <p className="text-sm font-bold text-slate-800 break-words">{profile[key] || (key === 'phoneNumber' ? 'Add a phone number' : 'Add your full name')}</p>
+                <p className="text-sm font-bold text-slate-800 [overflow-wrap:anywhere]">{profile[key] || (key === 'phoneNumber' ? 'Add a phone number' : 'Add your full name')}</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-emerald-500 shrink-0" />

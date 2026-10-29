@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { HeartPulse, MapPin, ShieldCheck } from 'lucide-react';
 import './SplashScreen.css';
 
 const INTRO_DURATION = 2500;
@@ -11,9 +12,9 @@ function WatchMark() {
     <svg className="family-splash__mark" viewBox="0 0 144 144" fill="none" aria-hidden="true">
       <defs>
         <linearGradient id={`${id}-tile`} x1="18" y1="8" x2="126" y2="144" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#79F4AC" />
-          <stop offset=".42" stopColor="#14BC7F" />
-          <stop offset="1" stopColor="#006348" />
+          <stop stopColor="#BCFFDA" />
+          <stop offset=".42" stopColor="#32D4A2" />
+          <stop offset="1" stopColor="#00A179" />
         </linearGradient>
         <linearGradient id={`${id}-edge`} x1="20" y1="0" x2="120" y2="144" gradientUnits="userSpaceOnUse">
           <stop stopColor="#D3FFE5" />
@@ -28,7 +29,7 @@ function WatchMark() {
       <rect x="3" y="3" width="138" height="138" rx="38" fill={`url(#${id}-tile)`} />
       <rect x="3" y="3" width="138" height="138" rx="38" fill={`url(#${id}-shine)`} />
       <rect x="3" y="3" width="138" height="138" rx="38" stroke={`url(#${id}-edge)`} strokeWidth="1.5" />
-      <rect x="8" y="8" width="128" height="128" rx="33" stroke="white" strokeOpacity=".1" />
+      <rect x="8" y="8" width="128" height="128" rx="33" stroke="white" strokeOpacity=".55" />
       <g className="family-splash__watch" stroke="#F1FFF7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
         <path className="family-splash__strap" d="M58 35L61 25C61.5 23 63 22 65 22H79C81 22 82.5 23 83 25L86 35M58 109L61 119C61.5 121 63 122 65 122H79C81 122 82.5 121 83 119L86 109" fill="#F1FFF7" fillOpacity=".9" />
         <rect className="family-splash__case" x="44" y="35" width="56" height="74" rx="17" pathLength="1" />
@@ -52,7 +53,7 @@ export default function SplashScreen({ ready, onComplete }) {
     const waitingTimer = window.setTimeout(() => setTakingLonger(true), 6500);
     const themeColor = document.querySelector('meta[name="theme-color"]');
     const previousThemeColor = themeColor?.content;
-    if (themeColor) themeColor.content = '#041C16';
+    if (themeColor) themeColor.content = '#edf8ef';
 
     return () => {
       window.clearTimeout(introTimer);
@@ -72,7 +73,6 @@ export default function SplashScreen({ ready, onComplete }) {
       <div className="family-splash__atmosphere" aria-hidden="true">
         <div className="family-splash__aurora family-splash__aurora--one" />
         <div className="family-splash__aurora family-splash__aurora--two" />
-        <div className="family-splash__grid" />
       </div>
 
       <p className="family-splash__eyebrow"><span /> A little closer, even from afar <span /></p>
@@ -90,6 +90,11 @@ export default function SplashScreen({ ready, onComplete }) {
         <h1 className="family-splash__name">Safe<span>Watch</span><span className="family-splash__name-dot">.</span></h1>
         <p className="family-splash__descriptor">Family monitoring for seniors</p>
         <p className="family-splash__promise">Care that stays close.</p>
+        <ul className="family-splash__features" aria-label="SafeWatch monitoring">
+          <li><HeartPulse aria-hidden="true"/><span>Health</span></li>
+          <li><MapPin aria-hidden="true"/><span>Location</span></li>
+          <li><ShieldCheck aria-hidden="true"/><span>Safety</span></li>
+        </ul>
       </div>
 
       <div className="family-splash__footer">

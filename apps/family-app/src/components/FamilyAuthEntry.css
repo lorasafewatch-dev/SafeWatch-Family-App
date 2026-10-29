@@ -1,0 +1,121 @@
+.family-auth {
+  --family-auth-ink: #0b203c;
+  --family-auth-green: #008b73;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100svh;
+  padding: clamp(28px, 8svh, 76px) 26px max(24px, env(safe-area-inset-bottom));
+  color: var(--family-auth-ink);
+  background: #e7f3e9;
+  font-family: 'Outfit', system-ui, sans-serif;
+}
+.family-auth *, .family-auth *::before, .family-auth *::after { box-sizing: border-box; }
+.family-auth::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(180deg, #f5fff22b, #eff9f371 38%, #f5fff44f 72%, #e7f5e82b), url('../assets/nature-garden.webp') center / cover;
+}
+.family-auth__shell { width: 100%; max-width: 400px; animation: family-auth-arrive .55s ease both; }
+.family-auth__intro { margin-bottom: 21px; text-align: center; }
+.family-auth__brand { display: flex; flex-direction: column; align-items: center; }
+.family-auth__mark {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 8px;
+  border-radius: 15px;
+  background: linear-gradient(140deg, #36d2ad, #009a80 55%, #007d70);
+  box-shadow: inset 0 1px 0 #ffffff73, 0 7px 19px #07715e16;
+}
+.family-auth__mark svg { width: 44px; height: 44px; }
+.family-auth__wordmark { color: #081c39; font-size: 27px; font-weight: 750; letter-spacing: -.9px; line-height: 1.15; }
+.family-auth__wordmark span { color: #008a74; }
+.family-auth__caption { margin: 3px 0 0; font-size: 11px; line-height: 1.3; font-weight: 500; letter-spacing: 4px; text-transform: uppercase; padding-left: 4px; }
+.family-auth__welcome { margin-top: 23px; }
+.family-auth__welcome h1 { margin: 0; font-size: clamp(22px, 6.4vw, 27px); line-height: 1.2; font-weight: 700; letter-spacing: -.7px; }
+.family-auth__welcome p { margin: 6px 0 0; color: #3e6666; font-size: 14px; line-height: 1.4; }
+.family-auth__card {
+  padding: 24px;
+  border: 1px solid #ffffffeb;
+  border-radius: 27px;
+  background: linear-gradient(135deg, #fbfffbd9, #f6fff3ad);
+  box-shadow: 0 14px 38px #163e2b10, inset 0 1px 0 #ffffffa6;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.family-auth__card-header { margin-bottom: 19px; }
+.family-auth__card-header h2 { margin: 0; color: #091c39; font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -.6px; }
+.family-auth__card-header > p { margin: 4px 0 0; color: #58708a; font-size: 14px; line-height: 1.45; }
+.family-auth__form { display: flex; flex-direction: column; gap: 15px; }
+.family-auth__field { min-width: 0; }
+.family-auth__field label { display: block; margin-bottom: 6px; color: #0c203d; font-size: 13px; font-weight: 600; line-height: 1.3; }
+.family-auth__input-wrap { position: relative; display: flex; align-items: center; min-height: 44px; border: 1px solid #9bb7c5; border-radius: 11px; background: #fafffcb8; transition: border-color .15s, box-shadow .15s; }
+.family-auth__input-wrap:focus-within { border-color: #008b73; box-shadow: 0 0 0 3px #008b731a; }
+.family-auth__input-wrap > svg { width: 20px; height: 20px; margin-left: 12px; color: #008375; flex-shrink: 0; stroke-width: 1.8; }
+.family-auth__input-wrap input { display: block; width: 100%; min-width: 0; height: 44px; padding: 9px 12px; border: 0; border-radius: 11px; outline: none; color: #122b46; background: transparent; font: inherit; font-size: 16px; line-height: 1.4; }
+.family-auth__input-wrap input::placeholder { color: #70839d; opacity: 1; }
+.family-auth__input-wrap:has(.family-auth__eye) input { padding-right: 44px; }
+.family-auth__eye { position: absolute; inset: 0 0 0 auto; display: grid; place-items: center; width: 44px; border: 0; border-radius: 9px; background: transparent; color: #516a84; cursor: pointer; }
+.family-auth__eye svg { width: 21px; height: 21px; stroke-width: 1.8; }
+.family-auth button { font-family: inherit; touch-action: manipulation; }
+.family-auth button:disabled { cursor: default; opacity: .6; }
+.family-auth button:focus-visible { outline: 2px solid #007d69; outline-offset: 4px; }
+.family-auth__forgot { align-self: flex-end; min-height: 28px; margin-top: -10px; margin-bottom: -6px; padding: 3px 0; border: 0; border-radius: 3px; color: #007b6c; background: transparent; font-size: 13px; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.family-auth__primary { display: flex; justify-content: center; align-items: center; gap: 12px; min-height: 46px; padding: 10px 16px; border: 1px solid #12b39b; border-radius: 12px; color: #fff; background: linear-gradient(145deg, #11a68c, #007d71); box-shadow: inset 0 1px 0 #ffffff52, 0 5px 14px #00795f14; font-size: 17px; font-weight: 600; line-height: 1.4; cursor: pointer; transition: filter .15s, transform .15s; }
+.family-auth__primary > svg { width: 23px; height: 23px; stroke-width: 1.8; }
+.family-auth__primary:hover:not(:disabled) { filter: brightness(.95); }
+.family-auth__primary:active:not(:disabled) { transform: translateY(1px); }
+.family-auth__text-link { display: block; min-height: 32px; margin-right: auto; margin-left: auto; padding: 6px 4px; border: 0; border-radius: 4px; background: transparent; color: #007e70; font-size: 13px; line-height: 1.45; text-align: center; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.family-auth__recovery { margin-top: 6px; }
+.family-auth__divider { display: flex; align-items: center; gap: 10px; margin: 8px 0 11px; color: #506780; font-size: 12px; line-height: 1.4; white-space: nowrap; }
+.family-auth__divider::before, .family-auth__divider::after { content: ''; height: 1px; flex: 1; background: #859ca7; opacity: .75; }
+.family-auth__secondary { display: block; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #008676; border-radius: 12px; background: #fafffb24; color: #007b6c; font-size: 15px; font-weight: 600; line-height: 1.4; cursor: pointer; transition: background .15s; }
+.family-auth__secondary:hover:not(:disabled) { background: #fafffb80; }
+.family-auth__confirmation { margin-top: 9px; font-size: 12px; }
+.family-auth__back { margin-top: 12px; }
+.family-auth__helper { margin: 0; color: #506b7c; font-size: 12px; line-height: 1.5; }
+.family-auth__helper p { margin: 0 0 6px; }
+.family-auth__helper button { padding: 0; border: 0; color: #007b6c; background: transparent; font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.family-auth__message { margin: 0 0 16px; padding: 11px 12px; border: 1px solid #addbc8; border-radius: 11px; color: #16573e; background: #f1fff4eb; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.family-auth__message--error { border-color: #edb9b9; color: #922e38; background: #fff2f2ed; }
+.family-auth__footer { margin-top: 19px; text-align: center; }
+.family-auth__footer button { min-height: 36px; padding: 6px 0; border: 0; border-radius: 3px; color: #006e61; background: transparent; font-size: 11px; line-height: 1.5; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+@keyframes family-auth-arrive { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@media (max-width: 359px) {
+  .family-auth { padding: 30px 18px 22px; }
+  .family-auth__card { padding: 21px; border-radius: 24px; }
+  .family-auth__welcome p { font-size: 13px; }
+  .family-auth__card-header h2 { font-size: 25px; }
+}
+@media (max-height: 740px) and (max-width: 959px) {
+  .family-auth { padding-top: 25px; }
+  .family-auth__welcome { margin-top: 17px; }
+}
+@media (min-width: 960px) {
+  .family-auth { padding: 44px 40px; }
+  .family-auth__shell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 432px); align-items: center; column-gap: clamp(55px, 8vw, 120px); max-width: 1040px; }
+  .family-auth__intro { grid-column: 1; grid-row: 1 / 3; margin: 0; text-align: left; }
+  .family-auth__brand { align-items: flex-start; }
+  .family-auth__mark { width: 78px; height: 78px; margin-bottom: 15px; border-radius: 22px; }
+  .family-auth__mark svg { width: 61px; height: 61px; }
+  .family-auth__wordmark { font-size: 44px; letter-spacing: -1.6px; }
+  .family-auth__caption { margin-top: 6px; font-size: 12px; letter-spacing: 6px; }
+  .family-auth__welcome { margin-top: 38px; }
+  .family-auth__welcome h1 { max-width: 470px; font-size: clamp(36px, 3.7vw, 47px); letter-spacing: -1.2px; line-height: 1.12; }
+  .family-auth__welcome p { max-width: 380px; margin-top: 13px; color: #365f60; font-size: 18px; line-height: 1.5; }
+  .family-auth__card { grid-column: 2; grid-row: 1; padding: 30px; border-radius: 30px; }
+  .family-auth__card-header h2 { font-size: 30px; }
+  .family-auth__footer { grid-column: 2; grid-row: 2; margin-top: 13px; }
+  .family-auth__footer button { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .family-auth__shell { animation: none; }
+  .family-auth button, .family-auth__input-wrap { transition: none; }
+}

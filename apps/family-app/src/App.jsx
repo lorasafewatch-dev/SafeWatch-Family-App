@@ -17,7 +17,7 @@ import { chooseFamilySenior, loadFamilySeniors, seniorManagementError } from '..
 import { getFamilyClient } from './supabaseClient.js';
 import useAccountSession from '../../shared/components/useAccountSession.js';
 import AccountMfaGate from '../../shared/components/AccountMfaGate.jsx';
-import AuthEntry from '../../shared/components/AuthEntry.jsx';
+import AuthEntry from './components/FamilyAuthEntry.jsx';
 import PrivacyTermsGate from '../../shared/components/PrivacyTermsGate.jsx';
 import PasswordRecovery from '../../shared/components/PasswordRecovery.jsx';
 import RecoveryLinkConfirm from '../../shared/components/RecoveryLinkConfirm.jsx';

@@ -3,7 +3,7 @@ import { authFlowError, requestPasswordReset, resendAccountConfirmation, signInA
 import PrivacyTermsDialog from './PrivacyTermsDialog.jsx';
 
 const inputClass = 'mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 focus:outline-2 focus:outline-emerald-500 disabled:opacity-50';
-export default function AuthEntry({client,app,initialError='',notice='',onRecovered}) {
+export default function AuthEntry({client,app,initialError='',notice='',onRecovered,FormComponent}) {
   const [mode,setMode]=useState('login');
   const [email,setEmail]=useState(''); const [password,setPassword]=useState('');
   const [confirmation,setConfirmation]=useState(''); const [fullName,setFullName]=useState('');
@@ -41,6 +41,18 @@ export default function AuthEntry({client,app,initialError='',notice='',onRecove
       if(mounted.current){setCooldown(60);setMessage('If an account exists for this email, a reset link has been requested. Check your inbox and spam folder.');}
     }
   });};
+  const resendConfirmation=()=>run(async()=>{await resendAccountConfirmation(client,email,window.location.origin);if(mounted.current)setMessage('Confirmation requested. Check your inbox and spam folder.');});
+  const privacyDialogContent=privacyDialog&&<PrivacyTermsDialog key={privacyDialog} readOnly={privacyDialog==='read'} stage="signup"
+    onDecline={()=>privacyDialog==='signup'?changeMode('login'):setPrivacyDialog(null)}
+    onAccept={acceptance=>{setPrivacyAcceptance(acceptance);setPrivacyDialog(null);}}/>;
+  if(FormComponent)return <><FormComponent
+    mode={mode} email={email} password={password} confirmation={confirmation} fullName={fullName} resetCode={resetCode}
+    privacyAcceptance={privacyAcceptance} showPassword={showPassword} busy={busy} error={error} message={message} cooldown={cooldown}
+    onSubmit={submit} onModeChange={changeMode} onEmailChange={setEmail} onPasswordChange={setPassword}
+    onConfirmationChange={setConfirmation} onNameChange={setFullName} onCodeChange={value=>setResetCode(value.replace(/\D/g,''))}
+    onTogglePassword={()=>setShowPassword(value=>!value)} onReviewTerms={()=>setPrivacyDialog('signup')}
+    onPrivacy={()=>setPrivacyDialog('read')} onResendConfirmation={resendConfirmation}
+  />{privacyDialogContent}</>;
   const dashboard=app==='dashboard';
   return <><div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 md:p-10">
     <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-10 items-center">
@@ -70,11 +82,9 @@ export default function AuthEntry({client,app,initialError='',notice='',onRecove
         </form>
         {(mode==='forgot'||mode==='login')&&<button disabled={busy} onClick={()=>changeMode('code')} className="w-full text-sm font-semibold text-emerald-700 underline">Enter reset code</button>}
         {mode==='login'?<><button disabled={busy} onClick={()=>changeMode('signup')} className="w-full rounded-2xl border border-emerald-500 py-3 font-bold text-emerald-700">Create an account</button>
-          <button disabled={busy} onClick={()=>run(async()=>{await resendAccountConfirmation(client,email,window.location.origin);if(mounted.current)setMessage('Confirmation requested. Check your inbox and spam folder.');})} className="w-full text-sm text-slate-500 underline">Resend confirmation email</button></>:<button disabled={busy} onClick={()=>changeMode('login')} className="w-full text-sm font-semibold text-emerald-700">Back to login</button>}
+          <button disabled={busy} onClick={resendConfirmation} className="w-full text-sm text-slate-500 underline">Resend confirmation email</button></>:<button disabled={busy} onClick={()=>changeMode('login')} className="w-full text-sm font-semibold text-emerald-700">Back to login</button>}
         <button type="button" disabled={busy} onClick={()=>setPrivacyDialog('read')} className="w-full text-xs font-semibold text-slate-500 underline">Terms and Conditions &amp; Privacy Notice</button>
       </section>
     </div>
-  </div>{privacyDialog&&<PrivacyTermsDialog key={privacyDialog} readOnly={privacyDialog==='read'} stage="signup"
-    onDecline={()=>privacyDialog==='signup'?changeMode('login'):setPrivacyDialog(null)}
-    onAccept={acceptance=>{setPrivacyAcceptance(acceptance);setPrivacyDialog(null);}}/>}</>;
+  </div>{privacyDialogContent}</>;
 }

@@ -13,7 +13,8 @@ import AlertsView from './components/FamilyAlerts.jsx';
 import { FamilyBrand, FamilyNavigation, SeniorSelector } from './components/FamilyNatureUI.jsx';
 import FamilySeniors from './components/FamilySeniors.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
-import { chooseFamilySenior, loadFamilySeniors, seniorManagementError } from '../../shared/familySeniors.js';
+import { chooseFamilySenior, loadFamilySeniors, retainLinkedWatchAlerts, seniorManagementError } from '../../shared/familySeniors.js';
+import { withRequestTimeout } from '../../shared/requestTimeout.js';
 import { getFamilyClient } from './supabaseClient.js';
 import useAccountSession from '../../shared/components/useAccountSession.js';
 import AccountMfaGate from '../../shared/components/AccountMfaGate.jsx';
@@ -167,7 +168,7 @@ function App({ client } = {}) {
 
   const selectSenior = (id, devices = linkedSeniors) => {
     const next = chooseFamilySenior(devices, id);
-    if (next !== initializedDevice.current) {
+    if (next !== initializedDevice.current || !next) {
       telemetryRequest.current += 1;
       telemetryBusy.current = false;
       setTelemetry(EMPTY_TELEMETRY);
@@ -191,11 +192,28 @@ function App({ client } = {}) {
     seniorListBusy.current = true;
     const request = ++seniorListRequest.current;
     try {
-      const devices = await loadFamilySeniors(supabase, userId);
+      const devices = await withRequestTimeout(loadFamilySeniors(supabase, userId), 10000,
+        'Loading your watches took too long. Please check your connection and retry.');
       if (request !== seniorListRequest.current) return;
+      const allowedIds = new Set(devices.map(device => device.id));
+      if (linkedSeniorsRef.current.length !== devices.length || linkedSeniorsRef.current.some(device => !allowedIds.has(device.id))) {
+        alertsRequest.current += 1;
+      }
       setLinkedSeniors(devices);
       linkedSeniorsRef.current = devices;
       setSeniorListError('');
+      alertMemory.current = retainLinkedWatchAlerts(alertMemory.current, devices);
+      saveAlertMemory();
+      const allowedKeys = new Set(alertMemory.current.incidents.map(incident => incident.key));
+      activeAlertKeys.current = new Set([...activeAlertKeys.current].filter(key => allowedKeys.has(key)));
+      setFamilyAlerts(current => current.some(incident => !allowedIds.has(incident.device_id))
+        ? current.filter(incident => allowedIds.has(incident.device_id)) : current);
+      setPopupKey(key => allowedKeys.has(key) ? key : null);
+      if (pendingTone.current && !allowedKeys.has(pendingTone.current.key)) {
+        pendingTone.current = null;
+        setSoundsBlocked(false);
+        stopAlertSounds();
+      }
       for (const id of lastGpsByDevice.current.keys()) {
         if (!devices.some(device => device.id === id)) lastGpsByDevice.current.delete(id);
       }
@@ -474,9 +492,10 @@ function App({ client } = {}) {
   const renderView = () => {
     if (!selectedDeviceId && !['profile', 'alerts', 'seniors'].includes(view)) {
       return <div className="px-6 py-10 space-y-5">
-        <h2 className="text-2xl font-black text-slate-800">{seniorListLoading ? 'Loading your seniors…' : 'Choose a senior to monitor'}</h2>
-        <p className="text-sm text-slate-500">Add a senior to your account, then choose whose health and location to view.</p>
-        <button onClick={() => setView('seniors')} className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white">Manage watches</button>
+        <h2 className="text-2xl font-black text-slate-800">{seniorListLoading ? 'Loading your seniors…' : seniorListError ? 'Your watches could not be loaded' : 'No watches linked'}</h2>
+        <p className="text-sm text-slate-500">{seniorListLoading ? 'Checking the watches linked to your account.' : seniorListError ? 'Your account is signed in. Retry loading your watches or open Profile to manage your account.' : 'Your account is ready. Add a senior to request monitoring access. A deleted senior will no longer appear here.'}</p>
+        {seniorListError && <button onClick={() => { setSeniorListLoading(true); fetchLinkedSeniors(undefined, true); }} className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white">Retry loading watches</button>}
+        {!seniorListLoading && !seniorListError && <button onClick={() => setView('seniors')} className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white">Manage watches</button>}
       </div>;
     }
     switch (view) {

@@ -3,21 +3,29 @@ import { readAccountAccess } from '../accountSecurity.js';
 import { accountCanUseApp, accountMatchesApp, loadAccountPermission } from '../accountAccess.js';
 import { getRecoveryLink, getRecoveryState, installRecoveryListener, recoveryRedirectError } from '../authFlow.js';
 import { loadPrivacyAcceptance } from '../privacyTerms.js';
+import { withRequestTimeout } from '../requestTimeout.js';
 
 export default function useAccountSession(client, app) {
   const [state, setState] = useState({ loading: true, access: null, error: '' });
   const [notice,setNotice] = useState('');
   const [revision, setRevision] = useState(0);
   const accountId = useRef(null);
+  const lastAuthToken = useRef(null);
   const sequence = useRef(0);
 
   useEffect(() => {
     installRecoveryListener(client);
     const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') setNotice('');
+      const id = session?.user?.id || null;
+      const token = session?.access_token || null;
+      // Restoring/focusing the same session must not cancel its in-flight
+      // verification. A new token, account, MFA or recovery event is rechecked.
+      if (id && token && id === accountId.current && token === lastAuthToken.current
+          && ['SIGNED_IN', 'INITIAL_SESSION'].includes(event)) return;
+      lastAuthToken.current = token;
       // Auth calls run in the effect, outside Supabase's callback/session lock.
       sequence.current += 1;
-      const id = session?.user?.id || null;
       if (!id || id !== accountId.current || event === 'SIGNED_IN') {
         setState({ loading: !!id, access: null, error: '' });
       }
@@ -36,7 +44,7 @@ export default function useAccountSession(client, app) {
   useEffect(() => {
     let active = true;
     const request = ++sequence.current;
-    (async () => {
+    withRequestTimeout((async () => {
       const recoveryLink=getRecoveryLink(client);
       if(recoveryLink)return{access:null,recoveryLink,recovery:null,linkError:''};
       const { data, error } = await client.auth.getSession();
@@ -52,7 +60,7 @@ export default function useAccountSession(client, app) {
         catch (failure) { privacyError = failure.message || 'Unable to check privacy acceptance. Please retry.'; }
       }
       return {access,permission,recovery,linkError,privacyReceipt,privacyError};
-    })().then(result => {
+    })(), 12000, 'Checking your account took too long. Please check your connection and retry.').then(result => {
       if (active && request === sequence.current) {
         accountId.current = result.access?.user.id || null;
         setState({ loading: false, ...result, error: '' });

@@ -1,13 +1,15 @@
 import { useRef, useState } from 'react';
 import { accountSecurityError, verifyAuthenticator } from '../accountSecurity.js';
 import AccountAuthenticator from './AccountAuthenticator.jsx';
+import LogoutConfirmation from './LogoutConfirmation.jsx';
 
-export default function AccountMfaGate({ client, access, error, onVerified }) {
+export default function AccountMfaGate({ client, access, error, onVerified, className = '', header, app }) {
   const factors = access?.factors.filter(factor => factor.factor_type === 'totp') || [];
   const [factorId, setFactorId] = useState(factors[0]?.id || '');
   const [code, setCode] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [logoutRequested, setLogoutRequested] = useState(false);
   const locked = useRef(false);
   const run = async action => {
     if (locked.current) return;
@@ -15,8 +17,9 @@ export default function AccountMfaGate({ client, access, error, onVerified }) {
     try { await action(); } catch (failure) { setMessage(accountSecurityError(failure)); }
     finally { locked.current = false; setBusy(false); }
   };
-  return <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+  return <div className={`min-h-screen flex items-center justify-center bg-slate-50 p-6 ${className}`}>
     <section className="w-full max-w-md bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-5">
+      {header}
       <h1 className="text-2xl font-bold text-slate-800">{access ? 'Two-factor verification' : 'Check your account'}</h1>
       {access?.enrollmentRequired ? <AccountAuthenticator client={client} user={access.user} required onUpdated={onVerified} /> : access ? <>
         <p className="text-sm text-slate-600">Enter the current 6-digit code from your authenticator to continue.</p>
@@ -36,7 +39,8 @@ export default function AccountMfaGate({ client, access, error, onVerified }) {
         </form> : <p role="alert" className="text-sm text-red-700">This account requires another verification method. Use your supported sign-in method or contact your administrator.</p>}
       </> : <><p role="alert" className="text-sm text-red-700">{error}</p><button onClick={onVerified} className="font-bold text-emerald-700 underline">Retry account check</button></>}
       {message && <p role="alert" className="text-sm text-red-700">{message}</p>}
-      <button disabled={busy} onClick={() => run(async () => { const { error } = await client.auth.signOut(); if (error) throw error; })} className="text-sm text-slate-600 underline">Sign out</button>
+      <button disabled={busy} onClick={() => setLogoutRequested(true)} className="text-sm text-slate-600 underline">Sign out</button>
     </section>
+    {logoutRequested && <LogoutConfirmation client={client} app={app} onCancel={() => setLogoutRequested(false)}/>}
   </div>;
 }

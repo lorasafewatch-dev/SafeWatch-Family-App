@@ -22,6 +22,7 @@ import PrivacyTermsGate from '../../shared/components/PrivacyTermsGate.jsx';
 import PasswordRecovery from '../../shared/components/PasswordRecovery.jsx';
 import RecoveryLinkConfirm from '../../shared/components/RecoveryLinkConfirm.jsx';
 import AccountAccessDenied from '../../shared/components/AccountAccessDenied.jsx';
+import LogoutConfirmation from '../../shared/components/LogoutConfirmation.jsx';
 import { Loader2 } from 'lucide-react';
 
 const EMPTY_TELEMETRY = { heart_rate: null, spo2: null, battery_percent: null,
@@ -33,6 +34,7 @@ const EMPTY_SENIOR = { name: 'Loading...', age: '--', gender: '--',
 function App({ client } = {}) {
   const supabase = client || getFamilyClient();
   const [view, setView] = useState('dashboard');
+  const [logoutRequested, setLogoutRequested] = useState(false);
   const contentRef = React.useRef(null);
   const [startupComplete, setStartupComplete] = useState(false);
   const { isLoggedIn, isLoadingAuth, userId, accountUser, accountPermission, pendingAccess, accessDenied, recoveryAccess, recoveryLink, authLinkError, authNotice, setAuthNotice, authError, retryAuth, privacyRequired, privacyError } = useAccountSession(supabase, 'family');
@@ -75,6 +77,7 @@ function App({ client } = {}) {
   };
 
   useEffect(() => {
+    setLogoutRequested(false);
     alertMemory.current = { incidents: [], ledger: {} };
     lastGpsByDevice.current = new Map();
     telemetryRequest.current += 1;
@@ -439,17 +442,11 @@ function App({ client } = {}) {
     );
   }
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.warn("Sign out error:", e);
-    }
-  };
+  const handleLogout = () => setLogoutRequested(true);
 
   if (recoveryLink) return <RecoveryLinkConfirm client={supabase} link={recoveryLink} onVerified={retryAuth} />;
   if (privacyRequired) return <PrivacyTermsGate key={userId} client={supabase} user={accountUser} app="family" error={privacyError} onAccepted={retryAuth} onRetry={retryAuth} />;
-  if (pendingAccess || authError) return <AccountMfaGate key={pendingAccess?.user.id || 'error'} client={supabase} access={pendingAccess} error={authError} onVerified={retryAuth} />;
+  if (pendingAccess || authError) return <AccountMfaGate key={pendingAccess?.user.id || 'error'} client={supabase} app="family" access={pendingAccess} error={authError} onVerified={retryAuth} />;
   if (accessDenied) return <AccountAccessDenied client={supabase} access={accessDenied} user={accountUser} app='family' onRetry={retryAuth} />;
   if (recoveryAccess) return <PasswordRecovery key={recoveryAccess.user?.id || 'invalid'} client={supabase} {...recoveryAccess} onNotice={setAuthNotice} onFinished={retryAuth} />;
 
@@ -534,6 +531,7 @@ function App({ client } = {}) {
         {renderView()}
       </main>
       <FamilyNavigation view={view} setView={setView}/>
+      {logoutRequested && <LogoutConfirmation client={supabase} app="family" onCancel={() => setLogoutRequested(false)} onLoggedOut={() => { setLogoutRequested(false); setView('dashboard'); }}/>}
       <AlertWarning incident={popupAlert} now={now} onConfirm={handleAcknowledgeAlert}
         onMinimize={() => setPopupKey(null)} busy={!!confirmingKey} error={alertError}
         soundsBlocked={soundsBlocked} onEnableSounds={unlockSounds}/>

@@ -204,6 +204,28 @@ function App({ client } = {}) {
     }
   };
 
+  const removeLinkedSenior = id => {
+    seniorListRequest.current += 1;
+    seniorListBusy.current = false;
+    const remaining = linkedSeniorsRef.current.filter(device => device.id !== id);
+    linkedSeniorsRef.current = remaining;
+    setLinkedSeniors(remaining);
+    lastGpsByDevice.current.delete(id);
+    selectSenior(selectedDevice.current, remaining);
+    alertsRequest.current += 1;
+    const removed = alertMemory.current.incidents.filter(incident => incident.device_id === id);
+    for (const incident of removed) {
+      activeAlertKeys.current.delete(incident.key);
+      delete alertMemory.current.ledger[incident.key];
+    }
+    alertMemory.current.incidents = alertMemory.current.incidents.filter(incident => incident.device_id !== id);
+    saveAlertMemory();
+    setFamilyAlerts(current => current.filter(incident => incident.device_id !== id));
+    setPopupKey(key => activeAlertKeys.current.has(key) ? key : null);
+    pendingTone.current = null;
+    stopAlertSounds();
+  };
+
   useEffect(() => {
     if (!isLoggedIn || !userId) return;
     fetchLinkedSeniors(undefined, true);
@@ -453,14 +475,21 @@ function App({ client } = {}) {
   };
 
   const renderView = () => {
-    if (!selectedDeviceId && view !== 'profile' && view !== 'alerts') {
+    if (!selectedDeviceId && !['profile', 'alerts', 'seniors'].includes(view)) {
       return <div className="px-6 py-10 space-y-5">
         <h2 className="text-2xl font-black text-slate-800">{seniorListLoading ? 'Loading your seniors…' : 'Choose a senior to monitor'}</h2>
         <p className="text-sm text-slate-500">Add a senior to your account, then choose whose health and location to view.</p>
-        <button onClick={() => setView('profile')} className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white">Manage my seniors</button>
+        <button onClick={() => setView('seniors')} className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white">Manage watches</button>
       </div>;
     }
     switch (view) {
+      case 'seniors':
+        return <div className="px-6 py-8 space-y-5">
+          <h1 className="text-2xl font-black text-slate-800">Manage watches</h1>
+          <FamilySeniors client={supabase} seniors={linkedSeniors} selectedDeviceId={selectedDeviceId}
+            loading={seniorListLoading} loadError={seniorListError} onReload={() => fetchLinkedSeniors(undefined, true)}
+            onSelect={id => selectSenior(id)} onRemoved={removeLinkedSenior} onChanged={id => fetchLinkedSeniors(id, true)}/>
+        </div>;
       case 'dashboard':
         return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} handleSendSOS={handleSendSOS} sendingSos={sendingSos} sosError={sosError} />;
       case 'location':
@@ -473,7 +502,7 @@ function App({ client } = {}) {
         return <div className="nature-account"><ProfileView client={supabase} handleLogout={handleLogout}>
           <FamilySeniors client={supabase} seniors={linkedSeniors} selectedDeviceId={selectedDeviceId}
             loading={seniorListLoading} loadError={seniorListError} onReload={() => fetchLinkedSeniors(undefined, true)}
-            onSelect={id => selectSenior(id)} onChanged={id => fetchLinkedSeniors(id, true)} />
+            onSelect={id => selectSenior(id)} onRemoved={removeLinkedSenior} onChanged={id => fetchLinkedSeniors(id, true)} />
         </ProfileView></div>;
       default:
         return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} handleSendSOS={handleSendSOS} sendingSos={sendingSos} sosError={sosError} />;
@@ -499,8 +528,9 @@ function App({ client } = {}) {
       )}
       <main className="nature-content" ref={contentRef}>
         <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length}/>
+        {!['profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-manage-watches"><button type="button" onClick={() => setView('seniors')}>Manage watches</button></div>}
         {view !== 'profile' && seniorListError && <p role="alert" className="nature-notice">{seniorListError}</p>}
-        {!['dashboard', 'location', 'profile'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} disabled={sendingSos} compact/></div>}
+        {!['dashboard', 'location', 'profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} disabled={sendingSos} compact/></div>}
         {renderView()}
       </main>
       <FamilyNavigation view={view} setView={setView}/>

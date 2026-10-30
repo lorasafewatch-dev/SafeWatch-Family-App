@@ -213,3 +213,6 @@
 @media (prefers-reduced-motion: reduce) {
   .family-nature *, .family-nature *::before, .family-nature *::after { scroll-behavior: auto; }
 }
+.nature-manage-watches { display: flex; justify-content: flex-end; padding: 0 24px 8px; }
+.nature-manage-watches button { min-height: 40px; padding: 8px 14px; border: 1px solid #cbded0; border-radius: 12px; background: #ffffffb3; color: #295d42; font-size: 12px; font-weight: 700; }
+.nature-manage-watches button:hover { background: #eef8ee; }

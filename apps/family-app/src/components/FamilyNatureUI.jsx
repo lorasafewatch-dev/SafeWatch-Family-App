@@ -63,7 +63,7 @@ export function ReadingCard({ type, value }) {
 
 export function FamilyNavigation({ view, setView }) {
   const tabs = [['dashboard', 'Home', Home], ['location', 'Location', MapPin], ['health', 'Health', Heart], ['alerts', 'Alerts', Bell], ['profile', 'Profile', User]];
-  return <nav className="nature-nav" aria-label="Family app navigation">{tabs.map(([key, label, Icon]) => <button key={key} type="button" onClick={() => setView(key)} className={`nature-nav__item${key === 'health' ? ' nature-nav__item--health' : ''}${view === key ? ' is-active' : ''}`} aria-current={view === key ? 'page' : undefined}><span className="nature-nav__icon"><Icon aria-hidden="true"/></span><span>{label}</span></button>)}</nav>;
+  return <nav className="nature-nav" aria-label="Family app navigation">{tabs.map(([key, label, Icon]) => <button key={key} type="button" onClick={() => setView(key)} className={`nature-nav__item${key === 'health' ? ' nature-nav__item--health' : ''}${view === key || view === 'seniors' && key === 'profile' ? ' is-active' : ''}`} aria-current={view === key || view === 'seniors' && key === 'profile' ? 'page' : undefined}><span className="nature-nav__icon"><Icon aria-hidden="true"/></span><span>{label}</span></button>)}</nav>;
 }
 
 export function FamilyPageTitle({ title, children }) {

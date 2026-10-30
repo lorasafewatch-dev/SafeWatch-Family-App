@@ -6,7 +6,7 @@ const emptyRegistration = { name: '', watchId: '', age: '', gender: 'Not specifi
 const inputClass = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 focus:outline-2 focus:outline-emerald-500 disabled:opacity-60';
 const Field = ({ label, id, children }) => <div><label htmlFor={id} className="block text-xs font-bold text-slate-600 mb-2">{label}</label>{children}</div>;
 
-export default function FamilySeniors({ client, seniors, selectedDeviceId, loading, loadError, onReload, onSelect, onChanged }) {
+export default function FamilySeniors({ client, seniors, selectedDeviceId, loading, loadError, onReload, onSelect, onChanged, onRemoved }) {
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState('existing');
   const [requests, setRequests] = useState([]);
@@ -54,9 +54,10 @@ export default function FamilySeniors({ client, seniors, selectedDeviceId, loadi
     setBusy(true); setError(''); setMessage('');
     try {
       await unlinkFamilySenior(client, removing.id);
+      onRemoved?.(removing.id);
       await onChanged();
       if (!mounted.current) return;
-      setRemoving(null); setMessage('Senior removed from your list.');
+      setRemoving(null); setMessage('Watch removed from your account.');
     } catch (error) { if (mounted.current) setError(seniorManagementError(error)); }
     finally { busyRef.current = false; if (mounted.current) setBusy(false); }
   };
@@ -106,11 +107,11 @@ export default function FamilySeniors({ client, seniors, selectedDeviceId, loadi
           {selectedDeviceId === senior.id ? 'Selected senior' : 'Monitor this senior'}
         </button>
         <button disabled={busy} aria-label={`Remove ${senior.patient_name} from my seniors`} onClick={() => { setRemoving(senior); setError(''); setMessage(''); }}
-          className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"><Trash2 className="w-4 h-4" /> Remove</button>
+          className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"><Trash2 className="w-4 h-4" /> Remove watch</button>
       </div>
       {removing?.id === senior.id && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 space-y-3">
-        <p className="text-sm font-bold text-red-800">Remove {senior.patient_name} from your list?</p>
-        <p className="text-sm text-red-700">Their watch, health history, and barangay record will stay available. Adding them again requires a new approval.</p>
+        <p className="text-sm font-bold text-red-800">Remove {senior.patient_name}’s watch from your account?</p>
+        <p className="text-sm text-red-700">Their watch, health history, and barangay record will stay available. Adding them again requires a new approval. To permanently delete the senior’s information, contact barangay staff.</p>
         <div className="flex gap-3">
           <button disabled={busy} onClick={remove} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy ? 'Removing…' : 'Remove from my list'}</button>
           <button disabled={busy} onClick={() => setRemoving(null)} className="text-sm font-bold text-slate-600">Cancel removal</button>

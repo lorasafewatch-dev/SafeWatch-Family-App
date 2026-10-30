@@ -19,3 +19,9 @@ No database migration is needed. Production builds and synthetic browser checks
 cover cancellation, Escape, both admin entry points, failure/retry, repeated
 clicks, confirmed logout, keyboard focus, and the family layout on a phone.
 Testing does not sign out real users.
+
+The family app registers its offline worker through `virtual:pwa-register` so
+the configured auto-update mode reloads an old running client when the new
+worker activates. Plain injected registration previously left old JavaScript
+running after deployment. A family page already open on that old code needs
+one refresh to load the updated client. Account/session storage is retained.

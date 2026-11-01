@@ -83,9 +83,6 @@
 .nature-map-preview .leaflet-container { background: #e7f0e4; }
 .nature-map-preview .leaflet-control-attribution { font-size: 8px; line-height: 1.2; }
 .nature-home-map__notice { margin: 5px 4px 0; color: #8b682f; font-size: 10px; }
-.nature-sos { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 45px; padding: 9px 14px; border: 1px solid #ff9fa9; border-radius: 17px; color: #fff; font: inherit; font-size: 16px; font-weight: 600; background: linear-gradient(110deg, #ff6074, #ff576c); box-shadow: 0 5px 12px #fa647323, inset 0 1px 0 #ffffff47; cursor: pointer; }
-.nature-sos svg { width: 23px; height: 23px; }
-.nature-sos:hover:not(:disabled) { background: #eb405b; }
 .nature-update { margin: -3px 0 0; text-align: center; }
 .nature-freshness { display: inline-flex; align-items: center; gap: 6px; color: #557393; font-size: 11px; }
 .nature-freshness > svg { width: 15px; height: 15px; flex-shrink: 0; }

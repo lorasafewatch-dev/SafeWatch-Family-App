@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { telemetryTimestamp } from '../../shared/gpsStatus.js';
 import { gpsObservation, retainGpsObservation, loadLastGpsObservation } from '../../shared/gpsLocation.js';
-import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, confirmationErrorMessage, groupAlertIncidents, incidentSnapshot, planAlertSounds, requestFamilySos } from '../../shared/alertLifecycle.js';
+import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, confirmationErrorMessage, groupAlertIncidents, incidentSnapshot, planAlertSounds } from '../../shared/alertLifecycle.js';
 import { enableAlertSounds, playAlertSound, stopAlertSounds } from '../../shared/alertSound.js';
 import { isInsidePolygon } from '../../shared/safeZone.js';
 import AlertWarning, { formatDuration } from './components/AlertWarning.jsx';
@@ -45,8 +45,6 @@ function App({ client } = {}) {
   const [confirmingKey, setConfirmingKey] = useState(null);
   const [alertError, setAlertError] = useState('');
   const [soundsBlocked, setSoundsBlocked] = useState(false);
-  const [sendingSos, setSendingSos] = useState(false);
-  const [sosError, setSosError] = useState('');
   const [linkedSeniors, setLinkedSeniors] = useState([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
   useEffect(() => { contentRef.current?.scrollTo({ top: 0, behavior: 'auto' }); }, [view, selectedDeviceId]);
@@ -61,7 +59,6 @@ function App({ client } = {}) {
   const alertsRequest = React.useRef(0);
   const pendingTone = React.useRef(null);
   const confirmationBusy = React.useRef(false);
-  const sosBusy = React.useRef(false);
   const confirmedKeys = React.useRef(new Set());
   const activeAlertKeys = React.useRef(new Set());
   const lastGpsByDevice = React.useRef(new Map());
@@ -474,21 +471,6 @@ function App({ client } = {}) {
     );
   }
 
-  const handleSendSOS = async () => {
-    if (sosBusy.current) return;
-    sosBusy.current = true;
-    setSendingSos(true);
-    setSosError('');
-    try {
-      if (!senior.deviceId) throw new Error('No watch connected');
-      await requestFamilySos(supabase, senior.deviceId);
-      await fetchFamilyAlerts();
-    } catch (e) {
-      console.error("Error sending SOS:", e);
-      setSosError('The SOS alert could not be saved. Please try again.');
-    } finally { sosBusy.current = false; setSendingSos(false); }
-  };
-
   const renderView = () => {
     if (!selectedDeviceId && !['profile', 'alerts', 'seniors'].includes(view)) {
       return <div className="px-6 py-10 space-y-5">
@@ -507,9 +489,9 @@ function App({ client } = {}) {
             onSelect={id => selectSenior(id)} onRemoved={removeLinkedSenior} onChanged={id => fetchLinkedSeniors(id, true)}/>
         </div>;
       case 'dashboard':
-        return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} handleSendSOS={handleSendSOS} sendingSos={sendingSos} sosError={sosError} />;
+        return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} />;
       case 'location':
-        return <LocationView key={senior.deviceId || 'waiting'} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} disabled={sendingSos} telemetry={telemetry} now={now} />;
+        return <LocationView key={senior.deviceId || 'waiting'} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} now={now} />;
       case 'health':
         return <HealthView senior={senior} telemetry={telemetry} now={now} />;
       case 'alerts':
@@ -521,7 +503,7 @@ function App({ client } = {}) {
             onSelect={id => selectSenior(id)} onRemoved={removeLinkedSenior} onChanged={id => fetchLinkedSeniors(id, true)} />
         </ProfileView></div>;
       default:
-        return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} handleSendSOS={handleSendSOS} sendingSos={sendingSos} sosError={sosError} />;
+        return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} />;
     }
   };
 
@@ -546,7 +528,7 @@ function App({ client } = {}) {
         <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length}/>
         {!['profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-manage-watches"><button type="button" onClick={() => setView('seniors')}>Manage watches</button></div>}
         {view !== 'profile' && seniorListError && <p role="alert" className="nature-notice">{seniorListError}</p>}
-        {!['dashboard', 'location', 'profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} disabled={sendingSos} compact/></div>}
+        {!['dashboard', 'location', 'profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} compact/></div>}
         {renderView()}
       </main>
       <FamilyNavigation view={view} setView={setView}/>

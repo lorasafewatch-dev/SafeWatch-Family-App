@@ -28,7 +28,7 @@ export function retainLinkedWatchAlerts(memory, seniors) {
 export async function loadFamilySeniors(client, userId) {
   if (!userId) return [];
   const { data, error } = await client.from('family_seniors')
-    .select('device_id, created_at, devices(id, patient_name, device_name, age, gender)')
+    .select('device_id, created_at, devices(*)')
     .eq('user_id', userId).order('created_at', { ascending: true });
   if (error) throw error;
   return (data || []).filter(row => row.devices && row.devices.patient_name !== '[HIDDEN]')

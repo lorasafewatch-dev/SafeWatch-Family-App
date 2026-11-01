@@ -3,7 +3,6 @@ import { telemetryTimestamp } from '../../shared/gpsStatus.js';
 import { gpsObservation, retainGpsObservation, loadLastGpsObservation } from '../../shared/gpsLocation.js';
 import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, confirmationErrorMessage, groupAlertIncidents, incidentSnapshot, planAlertSounds } from '../../shared/alertLifecycle.js';
 import { enableAlertSounds, playAlertSound, stopAlertSounds } from '../../shared/alertSound.js';
-import { isInsidePolygon } from '../../shared/safeZone.js';
 import AlertWarning, { formatDuration } from './components/AlertWarning.jsx';
 import LocationView from './components/LocationView.jsx';
 import ProfileView from './components/ProfileView.jsx';
@@ -161,7 +160,19 @@ function App({ client } = {}) {
   }, [familyAlerts, isLoggedIn, now]);
 
   const [telemetry, setTelemetry] = useState(EMPTY_TELEMETRY);
-  const [senior, setSenior] = useState(EMPTY_SENIOR);
+  const [seniorRecord, setSenior] = useState(EMPTY_SENIOR);
+  const senior = { ...seniorRecord, safeZone: linkedSeniors.find(device => device.id === seniorRecord.deviceId)?.family_safe_zone ?? null };
+
+  const handleSafeZoneSaved = (deviceId, zone) => {
+    // An older list request must not replace the zone that was just saved.
+    seniorListRequest.current += 1;
+    seniorListBusy.current = false;
+    const devices = linkedSeniorsRef.current.map(device => device.id === deviceId
+      ? { ...device, family_safe_zone: zone } : device);
+    linkedSeniorsRef.current = devices;
+    setLinkedSeniors(devices);
+    fetchFamilyAlerts();
+  };
 
   const selectSenior = (id, devices = linkedSeniors) => {
     const next = chooseFamilySenior(devices, id);
@@ -299,7 +310,6 @@ function App({ client } = {}) {
           latestHasGpsFix,
           position: point,
           positionAt: retained?.observedAt || null,
-          isInsideSafeZone: !!point && isInsidePolygon(point.lat, point.lng),
         });
 
           setTelemetry(latest ? {
@@ -491,7 +501,7 @@ function App({ client } = {}) {
       case 'dashboard':
         return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} />;
       case 'location':
-        return <LocationView key={senior.deviceId || 'waiting'} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} now={now} />;
+        return <LocationView key={senior.deviceId || 'waiting'} client={supabase} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} now={now} onSafeZoneSaved={handleSafeZoneSaved} onReloadSafeZone={() => fetchLinkedSeniors(undefined, true)} />;
       case 'health':
         return <HealthView senior={senior} telemetry={telemetry} now={now} />;
       case 'alerts':

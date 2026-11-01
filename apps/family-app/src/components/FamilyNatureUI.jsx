@@ -2,7 +2,7 @@ import { useId } from 'react';
 import { Bell, ChevronDown, Clock, Droplet, Heart, Home, MapPin, ShieldCheck, User } from 'lucide-react';
 import { isLiveFamilyLocation, locationAge } from '../../../shared/gpsLocation.js';
 import { isValidGpsPoint } from '../../../shared/gpsStatus.js';
-import { isInsidePolygon } from '../../../shared/safeZone.js';
+import { familyZoneContains } from '../../../shared/familySafeZone.js';
 import seniorAvatar from '../assets/senior-nature.svg';
 import '../nature-glass.css';
 
@@ -11,7 +11,7 @@ export { seniorAvatar };
 export function locationPresentation(senior, now, urgent = false) {
   const known = isValidGpsPoint(senior.position);
   const live = known && isLiveFamilyLocation(senior, now);
-  const inside = known && isInsidePolygon(senior.position.lat, senior.position.lng);
+  const inside = known && familyZoneContains(senior.position, senior.safeZone);
   return { known, live, inside,
     tone: urgent ? 'alert' : !live ? 'waiting' : inside ? 'safe' : 'alert',
     label: urgent ? 'Safety alert' : !known ? 'Waiting for GPS' : !live ? 'Last known location' : inside ? 'Inside safe zone' : 'Outside safe zone',

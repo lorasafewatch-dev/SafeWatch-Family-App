@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, Marker, Popup, Polygon, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Popup, useMap } from 'react-leaflet';
 import { SafeWatchTiles } from '../../../shared/components/SafeWatchMap.jsx';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Battery, LocateFixed, Shield } from 'lucide-react';
 import { locationAge } from '../../../shared/gpsLocation.js';
-import { SAN_ISIDRO_EAST_BOUNDARY } from '../../../shared/safeZone.js';
+import { DEFAULT_SAFE_ZONE_NAME, familyZoneBounds } from '../../../shared/familySafeZone.js';
+import FamilySafeZoneLayer from './FamilySafeZoneLayer.jsx';
+import FamilySafeZoneEditor from './FamilySafeZoneEditor.jsx';
 import { FamilyPageTitle, Freshness, SeniorSelector, locationPresentation } from './FamilyNatureUI.jsx';
-import { createFamilyMarker } from './FamilyMapPreview.jsx';
+import { createFamilyMarker } from '../familyMapMarker.js';
 
-function MapControls({ position }) {
+function MapControls({ position, zone }) {
   const map = useMap();
   const controls = useRef(null);
   useEffect(() => {
@@ -23,20 +25,21 @@ function MapControls({ position }) {
     }}><LocateFixed aria-hidden="true"/>Center watch</button>
     <button type="button" onClick={() => {
       map.stop();
-      map.fitBounds(SAN_ISIDRO_EAST_BOUNDARY, { padding: [24, 24], animate: false });
-    }}><Shield aria-hidden="true"/>Show boundary</button>
+      map.fitBounds(familyZoneBounds(zone), { padding: [24, 24], maxZoom: 17, animate: false });
+    }}><Shield aria-hidden="true"/>Show safe zone</button>
   </div>;
 }
 
-export default function LocationView({ senior, seniors, selectedId, onSelect, disabled, telemetry, now }) {
+export default function LocationView({ client, senior, seniors, selectedId, onSelect, disabled, telemetry, now, onSafeZoneSaved, onReloadSafeZone }) {
   const state = locationPresentation(senior, now);
   const position = state.known ? [senior.position.lat, senior.position.lng] : null;
   // Only explicit map controls move the camera after this initial fit.
-  const [initialBounds] = useState(() => [...SAN_ISIDRO_EAST_BOUNDARY, ...(position ? [position] : [])]);
+  const [initialBounds] = useState(() => [...familyZoneBounds(senior.safeZone), ...(position ? [position] : [])]);
+  const { live, inside } = state;
   const icon = useMemo(() => L.divIcon({
-    html: createFamilyMarker(state),
+    html: createFamilyMarker({ live, inside }),
     className: 'family-location-marker', iconSize: [48, 48], iconAnchor: [24, 24], popupAnchor: [0, -24],
-  }), [state.live, state.inside]);
+  }), [live, inside]);
   const status = state.live ? 'Live GPS location' : state.known ? 'Last known location' : 'No location recorded';
   const zoneStatus = state.known ? `${state.inside ? 'Inside' : 'Outside'} safe zone${state.live ? '' : ' at last detection'}` : 'Waiting for a GPS fix';
 
@@ -50,17 +53,18 @@ export default function LocationView({ senior, seniors, selectedId, onSelect, di
     <section aria-label="Family location map" className="nature-location__map">
       <MapContainer bounds={initialBounds} boundsOptions={{ padding: [24, 24], maxZoom: 15 }} style={{ width: '100%', height: '100%' }}>
         <SafeWatchTiles/>
-        <Polygon positions={SAN_ISIDRO_EAST_BOUNDARY} pathOptions={{ color: '#2563eb', fillColor: '#60a5fa', fillOpacity: .18, weight: 3 }}><Popup>San Isidro East safe-zone boundary</Popup></Polygon>
+        <FamilySafeZoneLayer zone={senior.safeZone}/>
         {state.known && <Marker position={position} icon={icon} title={`${senior.name}'s detected position`}>
           <Popup autoPan={false}><p className="font-bold">{senior.name}</p><p>{status}</p><p>{zoneStatus}</p><p>GPS detected: {new Date(senior.positionAt).toLocaleString()}</p></Popup>
         </Marker>}
-        <MapControls position={position}/>
+        <MapControls position={position} zone={senior.safeZone}/>
       </MapContainer>
     </section>
     <section className="nature-map-status nature-glass" aria-label="Location and watch status">
-      <div className="nature-map-status__location"><span className="nature-map-status__shield"><Shield aria-hidden="true"/></span><div><p className={`nature-map-status__label${!state.live ? ' nature-text-waiting' : !state.inside ? ' nature-text-alert' : ''}`}>{zoneStatus}</p><p className="nature-map-status__place">{state.known && !state.inside ? 'Outside San Isidro East' : 'San Isidro East'}</p><Freshness>{state.freshness}</Freshness></div></div>
+      <div className="nature-map-status__location"><span className="nature-map-status__shield"><Shield aria-hidden="true"/></span><div><p className={`nature-map-status__label${!state.live ? ' nature-text-waiting' : !state.inside ? ' nature-text-alert' : ''}`}>{zoneStatus}</p><p className="nature-map-status__place">{senior.safeZone?.name || DEFAULT_SAFE_ZONE_NAME}</p><Freshness>{state.freshness}</Freshness></div></div>
       <div className="nature-map-status__battery"><Battery aria-hidden="true"/><div><span>Watch battery</span><strong>{telemetry.battery_percent == null ? '—' : `${telemetry.battery_percent}%`}</strong></div></div>
     </section>
+    <FamilySafeZoneEditor client={client} senior={senior} onSaved={onSafeZoneSaved} onReload={onReloadSafeZone}/>
     <details className="nature-location__details nature-glass"><summary>GPS and watch details</summary><p>{status}</p><p>{state.known ? `Lat: ${senior.position.lat.toFixed(5)}, Lng: ${senior.position.lng.toFixed(5)}` : 'Waiting for the first valid position'}</p><p>GPS detected: {state.known ? new Date(senior.positionAt).toLocaleString() : 'Not available'}</p><p>Watch update: {locationAge(telemetry.created_at, now)}</p></details>
   </div>;
 }

@@ -10,6 +10,7 @@ import ProfileView from './components/ProfileView.jsx';
 import DashboardView from './components/FamilyHome.jsx';
 import HealthView from './components/FamilyHealth.jsx';
 import AlertsView from './components/FamilyAlerts.jsx';
+import ActivityHistory from '../../shared/components/ActivityHistory.jsx';
 import { FamilyBrand, FamilyNavigation, SeniorSelector } from './components/FamilyNatureUI.jsx';
 import FamilySeniors from './components/FamilySeniors.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
@@ -566,7 +567,7 @@ function App({ client } = {}) {
   }
 
   const renderView = () => {
-    if (!selectedDeviceId && !['profile', 'alerts', 'seniors'].includes(view)) {
+    if (!selectedDeviceId && !['profile', 'alerts', 'seniors', 'history'].includes(view)) {
       return <div className="px-6 py-10 space-y-5">
         <h2 className="text-2xl font-black text-slate-800">{seniorListLoading ? 'Loading your seniors…' : seniorListError ? 'Your watches could not be loaded' : 'No watches linked'}</h2>
         <p className="text-sm text-slate-500">{seniorListLoading ? 'Checking the watches linked to your account.' : seniorListError ? 'Your account is signed in. Retry loading your watches or open Profile to manage your account.' : 'Your account is ready. Add a senior to request monitoring access. A deleted senior will no longer appear here.'}</p>
@@ -589,7 +590,9 @@ function App({ client } = {}) {
       case 'health':
         return <HealthView senior={senior} telemetry={telemetry} now={now} />;
       case 'alerts':
-        return <AlertsView senior={senior} familyAlerts={familyAlerts} now={now} confirmingKey={confirmingKey} error={alertError} handleAcknowledge={handleAcknowledgeAlert} handleDecline={incident => handleSosResponse(incident, 'declined')} handleDismissAll={handleDismissAll} sosResponses={sosResponses} sosResponsesError={sosResponsesError} onRetryResponses={fetchSosResponseUpdates} />;
+        return <AlertsView senior={senior} familyAlerts={familyAlerts} now={now} confirmingKey={confirmingKey} error={alertError} handleAcknowledge={handleAcknowledgeAlert} handleDecline={incident => handleSosResponse(incident, 'declined')} handleDismissAll={handleDismissAll} sosResponses={sosResponses} sosResponsesError={sosResponsesError} onRetryResponses={fetchSosResponseUpdates} onOpenHistory={() => setView('history')} />;
+      case 'history':
+        return <div className="nature-secondary"><button type="button" className="watch-activity__more" onClick={() => setView('alerts')}>Back to alerts</button><ActivityHistory key={userId} client={supabase} seniors={linkedSeniors} initialCategory="alerts"/></div>;
       case 'profile':
         return <div className="nature-account"><ProfileView client={supabase} handleLogout={handleLogout}>
           <FamilySeniors client={supabase} seniors={linkedSeniors} selectedDeviceId={selectedDeviceId}
@@ -622,7 +625,7 @@ function App({ client } = {}) {
         <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length} notifications={{ app: 'family', userId, alerts: familyAlerts, responses: sosResponses, loading: notificationsLoading, blocked: !!popupAlert, error: [notificationsError, sosResponsesError].filter(Boolean).join(' '), onRefresh: fetchFamilyAlerts, onOpenNotification: item => { setView('alerts'); if (item.active) setPopupKey(item.incident.key); } }}/>
         {!['profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-manage-watches"><button type="button" onClick={() => setView('seniors')}>Manage watches</button></div>}
         {view !== 'profile' && seniorListError && <p role="alert" className="nature-notice">{seniorListError}</p>}
-        {!['dashboard', 'location', 'profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} compact/></div>}
+        {!['dashboard', 'location', 'profile', 'seniors', 'history'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} compact/></div>}
         {renderView()}
       </main>
       <FamilyNavigation view={view} setView={setView}/>

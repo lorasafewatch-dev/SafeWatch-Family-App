@@ -5,9 +5,10 @@ import { FamilyPageTitle } from './FamilyNatureUI.jsx';
 import SosResponseUpdates, { SosResponseIndicator } from '../../../shared/components/SosResponseStatus.jsx';
 import { sosResponseState } from '../../../shared/sosResponse.js';
 
-export default function FamilyAlerts({ senior, familyAlerts, now, confirmingKey, error, handleAcknowledge, handleDecline, handleDismissAll, sosResponses, sosResponsesError, onRetryResponses }) {
+export default function FamilyAlerts({ senior, familyAlerts, now, confirmingKey, error, handleAcknowledge, handleDecline, handleDismissAll, sosResponses, sosResponsesError, onRetryResponses, onOpenHistory }) {
   return <div className="nature-secondary nature-alerts">
     <FamilyPageTitle title="Alerts">Health, location, and safety updates.</FamilyPageTitle>
+    {onOpenHistory && <button type="button" className="watch-activity__more" onClick={onOpenHistory}>Activity log &amp; alert history</button>}
     <div className="nature-alerts__heading"><h2><Bell aria-hidden="true"/>Pending alerts <span>{familyAlerts.length}</span></h2>{familyAlerts.length > 0 && <button type="button" data-confirm-alert disabled={!!confirmingKey} onClick={handleDismissAll}>Confirm all</button>}</div>
     {error && <p role="alert" className="nature-notice nature-notice--error">{error}</p>}
     {!familyAlerts.length ? <div className="nature-glass nature-alerts__empty"><span><ShieldCheck aria-hidden="true"/></span><h2>No pending alerts</h2><p>Safety alerts from your linked watches will appear here.</p></div> : familyAlerts.map(alert => {

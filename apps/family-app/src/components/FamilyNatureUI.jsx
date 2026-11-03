@@ -5,6 +5,7 @@ import { isValidGpsPoint } from '../../../shared/gpsStatus.js';
 import { familyZoneContains } from '../../../shared/familySafeZone.js';
 import seniorAvatar from '../assets/senior-nature.svg';
 import '../nature-glass.css';
+import NotificationBell from '../../../shared/components/NotificationBell.jsx';
 
 export { seniorAvatar };
 
@@ -19,10 +20,10 @@ export function locationPresentation(senior, now, urgent = false) {
   };
 }
 
-export function FamilyBrand({ onAlerts, alertCount = 0 }) {
+export function FamilyBrand({ onAlerts, alertCount = 0, notifications }) {
   return <header className="nature-brand">
     <div className="nature-brand__identity"><span className="nature-brand__mark"><ShieldCheck aria-hidden="true"/></span><div><span className="nature-brand__name">SafeWatch</span><span className="nature-brand__family">Family</span></div></div>
-    <button type="button" className="nature-brand__notifications" onClick={onAlerts} aria-label={`View alerts${alertCount ? ` (${alertCount} active)` : ''}`}><Bell aria-hidden="true"/>{alertCount > 0 && <span className="nature-brand__dot"/>}</button>
+    {notifications ? <NotificationBell key={notifications.userId || 'signed-out'} {...notifications} className="nature-brand__notifications" onViewAll={onAlerts}/> : <button type="button" className="nature-brand__notifications" onClick={onAlerts} aria-label={`View alerts${alertCount ? ` (${alertCount} active)` : ''}`}><Bell aria-hidden="true"/>{alertCount > 0 && <span className="nature-brand__dot"/>}</button>}
   </header>;
 }
 

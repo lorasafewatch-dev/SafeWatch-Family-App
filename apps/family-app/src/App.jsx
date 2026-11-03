@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { telemetryTimestamp } from '../../shared/gpsStatus.js';
 import { gpsObservation, retainGpsObservation, loadLastGpsObservation } from '../../shared/gpsLocation.js';
-import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, confirmationErrorMessage, groupAlertIncidents, incidentSnapshot, planAlertSounds } from '../../shared/alertLifecycle.js';
+import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, alertTitle, batteryAlertMessage, confirmationErrorMessage, groupAlertIncidents, incidentSnapshot, planAlertSounds } from '../../shared/alertLifecycle.js';
 import { enableAlertSounds, playAlertSound, stopAlertSounds } from '../../shared/alertSound.js';
+import { isFamilyActionable, loadSosResponses, mergeSosResponse, respondToSos, sosResponseError, sosResponseState } from '../../shared/sosResponse.js';
 import AlertWarning, { formatDuration } from './components/AlertWarning.jsx';
 import LocationView from './components/LocationView.jsx';
 import ProfileView from './components/ProfileView.jsx';
@@ -40,6 +41,10 @@ function App({ client } = {}) {
   const { isLoggedIn, isLoadingAuth, userId, accountUser, accountPermission, pendingAccess, accessDenied, recoveryAccess, recoveryLink, authLinkError, authNotice, setAuthNotice, authError, retryAuth, privacyRequired, privacyError } = useAccountSession(supabase, 'family');
   const [now, setNow] = useState(Date.now());
   const [familyAlerts, setFamilyAlerts] = useState([]);
+  const [sosResponses, setSosResponses] = useState([]);
+  const [sosResponsesError, setSosResponsesError] = useState('');
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [notificationsError, setNotificationsError] = useState('');
   const [popupKey, setPopupKey] = useState(null);
   const [confirmingKey, setConfirmingKey] = useState(null);
   const [alertError, setAlertError] = useState('');
@@ -56,6 +61,9 @@ function App({ client } = {}) {
   const linkedSeniorsRef = React.useRef([]);
   const alertMemory = React.useRef({ incidents: [], ledger: {} });
   const alertsRequest = React.useRef(0);
+  const alertsBusy = React.useRef(false);
+  const sosResponsesRequest = React.useRef(0);
+  const sosResponsesBusy = React.useRef(false);
   const pendingTone = React.useRef(null);
   const confirmationBusy = React.useRef(false);
   const confirmedKeys = React.useRef(new Set());
@@ -82,7 +90,14 @@ function App({ client } = {}) {
     setSenior(EMPTY_SENIOR);
     setTelemetry(EMPTY_TELEMETRY);
     alertsRequest.current += 1;
+    alertsBusy.current = false;
+    sosResponsesRequest.current += 1;
+    sosResponsesBusy.current = false;
     setFamilyAlerts([]);
+    setSosResponses([]);
+    setSosResponsesError('');
+    setNotificationsLoading(true);
+    setNotificationsError('');
     setPopupKey(null);
     pendingTone.current = null;
     confirmedKeys.current.clear();
@@ -206,6 +221,7 @@ function App({ client } = {}) {
       const allowedIds = new Set(devices.map(device => device.id));
       if (linkedSeniorsRef.current.length !== devices.length || linkedSeniorsRef.current.some(device => !allowedIds.has(device.id))) {
         alertsRequest.current += 1;
+        alertsBusy.current = false;
       }
       setLinkedSeniors(devices);
       linkedSeniorsRef.current = devices;
@@ -215,6 +231,8 @@ function App({ client } = {}) {
       const allowedKeys = new Set(alertMemory.current.incidents.map(incident => incident.key));
       activeAlertKeys.current = new Set([...activeAlertKeys.current].filter(key => allowedKeys.has(key)));
       setFamilyAlerts(current => current.some(incident => !allowedIds.has(incident.device_id))
+        ? current.filter(incident => allowedIds.has(incident.device_id)) : current);
+      setSosResponses(current => current.some(incident => !allowedIds.has(incident.device_id))
         ? current.filter(incident => allowedIds.has(incident.device_id)) : current);
       setPopupKey(key => allowedKeys.has(key) ? key : null);
       if (pendingTone.current && !allowedKeys.has(pendingTone.current.key)) {
@@ -242,6 +260,7 @@ function App({ client } = {}) {
     lastGpsByDevice.current.delete(id);
     selectSenior(selectedDevice.current, remaining);
     alertsRequest.current += 1;
+    alertsBusy.current = false;
     const removed = alertMemory.current.incidents.filter(incident => incident.device_id === id);
     for (const incident of removed) {
       activeAlertKeys.current.delete(incident.key);
@@ -250,6 +269,7 @@ function App({ client } = {}) {
     alertMemory.current.incidents = alertMemory.current.incidents.filter(incident => incident.device_id !== id);
     saveAlertMemory();
     setFamilyAlerts(current => current.filter(incident => incident.device_id !== id));
+    setSosResponses(current => current.filter(incident => incident.device_id !== id));
     setPopupKey(key => activeAlertKeys.current.has(key) ? key : null);
     pendingTone.current = null;
     stopAlertSounds();
@@ -328,29 +348,58 @@ function App({ client } = {}) {
     }
   };
 
+  const fetchSosResponseUpdates = async () => {
+    if (!isLoggedIn || confirmationBusy.current || sosResponsesBusy.current) return;
+    const allowed = new Set(linkedSeniorsRef.current.map(device => device.id));
+    if (!allowed.size) { setSosResponses([]); return; }
+    const request = ++sosResponsesRequest.current;
+    sosResponsesBusy.current = true;
+    try {
+      const rows = await withRequestTimeout(loadSosResponses(supabase), 10000, 'SOS response updates took too long.');
+      if (request !== sosResponsesRequest.current) return;
+      const currentIds = new Set(linkedSeniorsRef.current.map(device => device.id));
+      setSosResponses(rows.filter(row => allowed.has(row.device_id) && currentIds.has(row.device_id)));
+      setSosResponsesError('');
+    } catch (error) {
+      if (request !== sosResponsesRequest.current) return;
+      setSosResponsesError(['PGRST202','42883'].includes(error.code) ? 'SOS response updates need the SafeWatch database update.' : 'SOS response updates could not be refreshed. Retry to see the latest decisions.');
+      setSosResponses(current => ['42501','PGRST301'].includes(error.code) ? [] : current.filter(row => allowed.has(row.device_id)));
+    } finally { if (request === sosResponsesRequest.current) sosResponsesBusy.current = false; }
+  };
+
   const fetchFamilyAlerts = async () => {
-    if (!isLoggedIn || confirmationBusy.current) return;
+    if (!isLoggedIn || confirmationBusy.current || alertsBusy.current) return;
+    alertsBusy.current = true;
+    setNotificationsLoading(true);
+    fetchSosResponseUpdates();
     const deviceIds = linkedSeniorsRef.current.map(device => device.id);
     if (!deviceIds.length) {
       alertsRequest.current += 1;
+      sosResponsesRequest.current += 1;
+      sosResponsesBusy.current = false;
       activeAlertKeys.current.clear();
       pendingTone.current = null;
       stopAlertSounds();
       setFamilyAlerts([]);
+      setSosResponses([]);
+      setSosResponsesError('');
+      alertsBusy.current = false;
+      setNotificationsLoading(false);
+      setNotificationsError('');
       setPopupKey(null);
       return;
     }
     const requestId = ++alertsRequest.current;
     try {
-      const { data, error } = await supabase.from('alerts')
+      const { data, error } = await withRequestTimeout(supabase.from('alerts')
         .select('*, devices(device_name, patient_name)')
         .in('device_id', deviceIds)
         .or(ALERT_QUERY_FILTER)
-        .order('created_at', { ascending: false }).limit(500);
+        .order('created_at', { ascending: false }).limit(500), 10000, 'Loading notifications took too long.');
       if (error) throw error;
       if (requestId !== alertsRequest.current) return;
       const incidents = groupAlertIncidents(data || [], alertMemory.current.incidents)
-        .filter(incident => !confirmedKeys.current.has(incident.key));
+        .filter(incident => isFamilyActionable(incident) && !confirmedKeys.current.has(incident.key));
       activeAlertKeys.current = new Set(incidents.map(incident => incident.key));
       if (pendingTone.current && !activeAlertKeys.current.has(pendingTone.current.key)) {
         pendingTone.current = null;
@@ -361,9 +410,11 @@ function App({ client } = {}) {
       alertMemory.current.incidents = incidentSnapshot(incidents);
       saveAlertMemory();
       setFamilyAlerts(incidents);
+      setNotificationsError('');
     } catch (error) {
       console.error('Error fetching family alerts:', error.message);
-    }
+      if (requestId === alertsRequest.current) setNotificationsError('Pending alerts could not be refreshed. Check your connection and retry.');
+    } finally { if (requestId === alertsRequest.current) { alertsBusy.current = false; setNotificationsLoading(false); } }
   };
 
   const commitConfirmation = incident => {
@@ -376,11 +427,13 @@ function App({ client } = {}) {
   };
 
   const handleAcknowledgeAlert = async (incident) => {
+    if (incident.alert_type === 'SOS') return handleSosResponse(incident, 'confirmed');
     if (confirmationBusy.current) return;
     confirmationBusy.current = true;
     setConfirmingKey(incident.key);
     setAlertError('');
     alertsRequest.current += 1;
+    alertsBusy.current = false;
     pendingTone.current = null;
     setSoundsBlocked(false);
     stopAlertSounds();
@@ -397,24 +450,54 @@ function App({ client } = {}) {
     }
   };
 
+  const handleSosResponse = async (incident, decision) => {
+    if (confirmationBusy.current) return;
+    confirmationBusy.current = true;
+    setConfirmingKey(incident.key);
+    setAlertError('');
+    alertsRequest.current += 1;
+    alertsBusy.current = false;
+    sosResponsesRequest.current += 1;
+    sosResponsesBusy.current = false;
+    pendingTone.current = null;
+    setSoundsBlocked(false);
+    stopAlertSounds();
+    try {
+      const updated = await respondToSos(supabase, incident, decision, 'family');
+      setSosResponses(current => mergeSosResponse(current, updated));
+      commitConfirmation(incident);
+    } catch (error) { setAlertError(sosResponseError(error)); }
+    finally {
+      confirmationBusy.current = false;
+      setConfirmingKey(null);
+      await fetchFamilyAlerts();
+    }
+  };
+
   const handleDismissAll = async () => {
     if (!familyAlerts.length || confirmationBusy.current) return;
     confirmationBusy.current = true;
     setConfirmingKey('all');
     setAlertError('');
     alertsRequest.current += 1;
+    alertsBusy.current = false;
+    sosResponsesRequest.current += 1;
+    sosResponsesBusy.current = false;
     pendingTone.current = null;
     setSoundsBlocked(false);
     stopAlertSounds();
     try {
       for (const incident of familyAlerts) {
-        await acknowledgeIncident(supabase, incident);
+        if (incident.alert_type === 'SOS') {
+          const updated = await respondToSos(supabase, incident, 'confirmed', 'family');
+          setSosResponses(current => mergeSosResponse(current, updated));
+        } else await acknowledgeIncident(supabase, incident);
         commitConfirmation(incident);
       }
       setPopupKey(null);
     } catch (error) {
       console.error('Error confirming alerts:', error.message);
-      setAlertError(confirmationErrorMessage(error));
+      setAlertError(sosResponseError(error));
     } finally {
       confirmationBusy.current = false;
       setConfirmingKey(null);
@@ -450,6 +533,7 @@ function App({ client } = {}) {
       telemetryRequest.current += 1;
       telemetryBusy.current = false;
       alertsRequest.current += 1;
+      alertsBusy.current = false;
       clearInterval(timer);
       supabase.removeChannel(subscription);
     };
@@ -505,7 +589,7 @@ function App({ client } = {}) {
       case 'health':
         return <HealthView senior={senior} telemetry={telemetry} now={now} />;
       case 'alerts':
-        return <AlertsView senior={senior} familyAlerts={familyAlerts} now={now} confirmingKey={confirmingKey} error={alertError} handleAcknowledge={handleAcknowledgeAlert} handleDismissAll={handleDismissAll} />;
+        return <AlertsView senior={senior} familyAlerts={familyAlerts} now={now} confirmingKey={confirmingKey} error={alertError} handleAcknowledge={handleAcknowledgeAlert} handleDecline={incident => handleSosResponse(incident, 'declined')} handleDismissAll={handleDismissAll} sosResponses={sosResponses} sosResponsesError={sosResponsesError} onRetryResponses={fetchSosResponseUpdates} />;
       case 'profile':
         return <div className="nature-account"><ProfileView client={supabase} handleLogout={handleLogout}>
           <FamilySeniors client={supabase} seniors={linkedSeniors} selectedDeviceId={selectedDeviceId}
@@ -527,15 +611,15 @@ function App({ client } = {}) {
       {activeAlert && !popupAlert && (
         <div className="relative z-[2001] bg-orange-50 border-b border-orange-200 px-5 py-4">
           <button onClick={() => setPopupKey(activeAlert.key)} className="w-full text-left text-sm font-bold text-orange-900">
-            {activeAlert.alert_type === 'SOS' ? 'SOS alert' : 'Outside the safe zone'} · {clock.escalated ? 'Barangay attention required' : `${formatDuration(clock.remainingSeconds)} remaining`}
+            {alertTitle(activeAlert)} · {activeAlert.alert_type === 'SOS' && activeAlert.details?.sos_assigned_to ? sosResponseState(activeAlert).message : activeAlert.alert_type === 'LOW_BATTERY' ? 'Please charge the watch' : clock.escalated ? 'Barangay attention required' : `${formatDuration(clock.remainingSeconds)} remaining`}
           </button>
-          <p className="text-xs text-orange-800 mt-1">Unconfirmed for {formatDuration(clock.elapsedSeconds)}. {clock.warning ? 'Time is running out.' : 'Tap to review and confirm.'}</p>
+          <p className="text-xs text-orange-800 mt-1">{activeAlert.alert_type === 'LOW_BATTERY' ? batteryAlertMessage(activeAlert) : `Unconfirmed for ${formatDuration(clock.elapsedSeconds)}. ${clock.warning ? 'Time is running out.' : 'Tap to review and confirm.'}`}</p>
           {alertError && <p role="alert" className="text-xs text-red-700 mt-2">{alertError}</p>}
           {soundsBlocked && <button onClick={unlockSounds} className="text-xs font-bold underline mt-2">Enable alert sounds</button>}
         </div>
       )}
       <main className="nature-content" ref={contentRef}>
-        <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length}/>
+        <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length} notifications={{ app: 'family', userId, alerts: familyAlerts, responses: sosResponses, loading: notificationsLoading, blocked: !!popupAlert, error: [notificationsError, sosResponsesError].filter(Boolean).join(' '), onRefresh: fetchFamilyAlerts, onOpenNotification: item => { setView('alerts'); if (item.active) setPopupKey(item.incident.key); } }}/>
         {!['profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-manage-watches"><button type="button" onClick={() => setView('seniors')}>Manage watches</button></div>}
         {view !== 'profile' && seniorListError && <p role="alert" className="nature-notice">{seniorListError}</p>}
         {!['dashboard', 'location', 'profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} compact/></div>}
@@ -543,7 +627,7 @@ function App({ client } = {}) {
       </main>
       <FamilyNavigation view={view} setView={setView}/>
       {logoutRequested && <LogoutConfirmation client={supabase} app="family" onCancel={() => setLogoutRequested(false)} onLoggedOut={() => { setLogoutRequested(false); setView('dashboard'); }}/>}
-      <AlertWarning incident={popupAlert} now={now} onConfirm={handleAcknowledgeAlert}
+      <AlertWarning incident={popupAlert} now={now} onConfirm={handleAcknowledgeAlert} onDecline={incident => handleSosResponse(incident, 'declined')}
         onMinimize={() => setPopupKey(null)} busy={!!confirmingKey} error={alertError}
         soundsBlocked={soundsBlocked} onEnableSounds={unlockSounds}/>
     </div>

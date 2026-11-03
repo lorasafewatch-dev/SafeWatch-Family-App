@@ -10,6 +10,7 @@ import FamilySafeZoneLayer from './FamilySafeZoneLayer.jsx';
 import FamilySafeZoneEditor from './FamilySafeZoneEditor.jsx';
 import { FamilyPageTitle, Freshness, SeniorSelector, locationPresentation } from './FamilyNatureUI.jsx';
 import { createFamilyMarker } from '../familyMapMarker.js';
+import LocationHistory from '../../../shared/components/LocationHistory.jsx';
 
 function MapControls({ position, zone }) {
   const map = useMap();
@@ -65,6 +66,7 @@ export default function LocationView({ client, senior, seniors, selectedId, onSe
       <div className="nature-map-status__battery"><Battery aria-hidden="true"/><div><span>Watch battery</span><strong>{telemetry.battery_percent == null ? '—' : `${telemetry.battery_percent}%`}</strong></div></div>
     </section>
     <FamilySafeZoneEditor client={client} senior={senior} onSaved={onSafeZoneSaved} onReload={onReloadSafeZone}/>
+    <LocationHistory key={senior.deviceId} client={client} deviceId={senior.deviceId} name={senior.name}/>
     <details className="nature-location__details nature-glass"><summary>GPS and watch details</summary><p>{status}</p><p>{state.known ? `Lat: ${senior.position.lat.toFixed(5)}, Lng: ${senior.position.lng.toFixed(5)}` : 'Waiting for the first valid position'}</p><p>GPS detected: {state.known ? new Date(senior.positionAt).toLocaleString() : 'Not available'}</p><p>Watch update: {locationAge(telemetry.created_at, now)}</p></details>
   </div>;
 }

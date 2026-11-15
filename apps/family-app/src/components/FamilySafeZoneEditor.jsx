@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Circle, MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { LocateFixed, MapPin, Pencil, Plus, ShieldCheck } from 'lucide-react';
+import { LocateFixed, MapPin, Pencil, Plus, RotateCcw, ShieldCheck } from 'lucide-react';
 import { SafeWatchTiles } from '../../../shared/components/SafeWatchMap.jsx';
 import { isValidGpsPoint } from '../../../shared/gpsStatus.js';
 import { DEFAULT_SAFE_ZONE_NAME, familyZoneBounds, MAX_SAFE_ZONE_RADIUS, MIN_SAFE_ZONE_RADIUS, safeZoneErrorMessage, saveFamilySafeZone, validateFamilySafeZone } from '../../../shared/familySafeZone.js';
@@ -69,7 +69,7 @@ export default function FamilySafeZoneEditor({ client, senior, onSaved, onReload
       const saved = await saveFamilySafeZone(client, senior.deviceId, config, editor.expected);
       onSaved(senior.deviceId, saved);
       setEditor(null);
-      setMessage(saved ? `${saved.name} saved. Monitoring uses this zone with the next GPS update.` : 'Default safe zone restored. Monitoring uses it with the next GPS update.');
+      setMessage(saved ? `${saved.name} saved. Monitoring uses this zone with the next GPS update.` : `${DEFAULT_SAFE_ZONE_NAME} default boundary restored. Monitoring uses it with the next GPS update.`);
     } catch (failure) {
       if (failure?.code === '40001') await onReload?.();
       setError(safeZoneErrorMessage(failure));
@@ -82,7 +82,7 @@ export default function FamilySafeZoneEditor({ client, senior, onSaved, onReload
     {!editor ? <>
       <div className="nature-zone__saved"><MapPin aria-hidden="true"/><div><h3>{zone?.name || DEFAULT_SAFE_ZONE_NAME}</h3><p>{zone ? `${zone.radius.toLocaleString()} m radius · Set by family` : 'Default barangay boundary'}</p></div></div>
       <button type="button" className="nature-zone-primary" onClick={() => open('edit')} disabled={!senior.deviceId}>{zone ? <Pencil aria-hidden="true"/> : <Plus aria-hidden="true"/>}{zone ? 'Edit safe zone' : 'Add safe zone'}</button>
-      {zone && <button type="button" className="nature-zone-link" onClick={() => open('reset')}>Use default boundary</button>}
+      {zone && <div className="nature-zone__restore"><p className="nature-zone__hint">Return to the default {DEFAULT_SAFE_ZONE_NAME} safe zone when needed.</p><button type="button" className="nature-zone-secondary" onClick={() => open('reset')}><RotateCcw aria-hidden="true"/>Restore {DEFAULT_SAFE_ZONE_NAME}</button></div>}
       {message && <p className="nature-zone-success" role="status">{message}</p>}
     </> : <form onSubmit={save}>
       {editor.mode === 'reset' ? <p className="nature-zone__help">Use the {DEFAULT_SAFE_ZONE_NAME} boundary instead of {editor.expected?.name}? This changes the safe zone for everyone linked to {senior.name}.</p> : <>
@@ -105,7 +105,7 @@ export default function FamilySafeZoneEditor({ client, senior, onSaved, onReload
         </fieldset>
       </>}
       {error && <p role="alert" className="nature-notice nature-notice--error">{error}</p>}
-      <div className="nature-zone__actions"><button type="button" className="nature-zone-secondary" disabled={busy} onClick={() => { setEditor(null); setError(''); }}>Cancel</button><button type="submit" className="nature-zone-primary" disabled={busy}>{busy ? 'Saving…' : editor.mode === 'reset' ? 'Use default boundary' : 'Save safe zone'}</button></div>
+      <div className="nature-zone__actions"><button type="button" className="nature-zone-secondary" disabled={busy} onClick={() => { setEditor(null); setError(''); }}>Cancel</button><button type="submit" className="nature-zone-primary" disabled={busy}>{busy ? 'Saving…' : editor.mode === 'reset' ? `Restore ${DEFAULT_SAFE_ZONE_NAME}` : 'Save safe zone'}</button></div>
     </form>}
   </section>;
 }

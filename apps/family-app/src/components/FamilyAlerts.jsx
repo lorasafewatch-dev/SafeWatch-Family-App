@@ -25,7 +25,7 @@ export default function FamilyAlerts({ senior, familyAlerts, now, confirmingKey,
           <SosResponseIndicator incident={alert}/>
           <p className="nature-alert__date">Latest update: {new Date(alert.details.last_seen_at).toLocaleTimeString()}</p>
           <button type="button" data-confirm-alert disabled={!!confirmingKey} onClick={() => handleAcknowledge(alert)}>{confirmingKey === alert.key ? 'Saving response…' : sos ? 'Confirm response' : 'Confirm I have checked'}</button>
-          {sos && handleDecline && <button type="button" className="sos-decline-button" data-confirm-alert disabled={!!confirmingKey || response.responses.family?.decision === 'declined'} onClick={() => handleDecline(alert)}>Decline — notify barangay secretary</button>}
+          {sos && handleDecline && <><p>Cannot reach the senior? Notify the barangay secretary or admin immediately.</p><button type="button" className="sos-decline-button" data-confirm-alert disabled={!!confirmingKey || response.responses.family?.decision === 'declined'} onClick={() => handleDecline(alert)}>{response.responses.family?.decision === 'declined' ? 'Barangay already notified' : 'Can’t respond — notify barangay'}</button></>}
           <time dateTime={alert.created_at}>{new Date(alert.created_at).toLocaleString()}</time>
         </div></article>;
     })}

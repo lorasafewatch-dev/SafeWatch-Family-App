@@ -47,9 +47,9 @@ export default function AlertWarning({ incident, now, onConfirm, onDecline, onMi
             className={`w-full py-4 text-white font-black rounded-2xl text-sm disabled:opacity-50 ${isSos ? 'bg-red-500' : 'bg-orange-500'}`}>
             {busy ? 'Saving response…' : isSos ? 'Confirm response' : 'Confirm I have checked'}
           </button>
-          {isSos && onDecline && <button data-confirm-alert disabled={busy || response.responses.family?.decision === 'declined'} onClick={() => onDecline(incident)} className="sos-decline-button w-full">Decline — notify barangay secretary</button>}
+          {isSos && onDecline && <button type="button" data-confirm-alert disabled={busy || response.responses.family?.decision === 'declined'} onClick={() => onDecline(incident)} className="sos-decline-button w-full">{response.responses.family?.decision === 'declined' ? 'Barangay already notified' : 'Can’t respond — notify barangay'}</button>}
           <button onClick={onMinimize} className="text-sm font-bold text-slate-600">Keep monitoring</button>
-          <p className="text-xs text-slate-400">{isSos ? 'Declining requests help from the barangay secretary. The SOS stays open until someone confirms a response.' : battery ? 'This alert stays active until confirmed or the battery recovers.' : 'Keeping this window closed does not confirm the alert or stop its timer.'}</p>
+          <p className="text-xs text-slate-400">{isSos ? 'If you cannot reach the senior, notify the barangay secretary or admin immediately. The SOS stays open until someone confirms a response.' : battery ? 'This alert stays active until confirmed or the battery recovers.' : 'Keeping this window closed does not confirm the alert or stop its timer.'}</p>
         </div>
       </div>
     </div>

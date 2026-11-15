@@ -140,7 +140,8 @@
 .nature-zone > .nature-zone-primary { width: 100%; }
 .nature-zone-primary:hover:not(:disabled) { background: #007e5e; }
 .nature-zone-secondary { border-color: #d5e5dc; color: #426550; background: #f7fcf8; }
-.nature-zone-link { display: block; margin: 13px auto 0; padding: 3px; border: 0; color: #547768; background: transparent; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.nature-zone__restore { margin-top: 14px; }
+.nature-zone__restore .nature-zone-secondary { width: 100%; margin-top: 8px; }
 .nature-zone__help { margin: 0 0 15px; color: #526f85; font-size: 12px; line-height: 1.6; }
 .nature-zone-fields { min-width: 0; display: flex; flex-direction: column; gap: 11px; margin: 0; padding: 0; border: 0; }
 .nature-zone-fields label { display: flex; flex-direction: column; gap: 6px; color: #365b4d; font-size: 12px; font-weight: 550; }

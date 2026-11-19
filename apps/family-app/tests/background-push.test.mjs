@@ -47,9 +47,16 @@ assert.equal(opened.length, 1);
 await event('push', { data: { json: () => ({ ...payload, deliveryId: 'wrong-user', userId: 'other' }) } });
 await event('push', { data: { json: () => ({ ...payload, deliveryId: 'old', expiresAt: '2000-01-01' }) } });
 assert.equal(shown.length, 1);
+const reactivated = { ...payload, reactivated: true, deliveryId: 'delivery-42-reactivated' };
+await event('push', { data: { json: () => reactivated } });
+await event('push', { data: { json: () => reactivated } });
+assert.equal(shown.length, 2, 'a new activation gets one fresh notification and duplicate retries stay suppressed');
+assert.notEqual(shown[1].options.tag, shown[0].options.tag, 'the OS can alert again for the same incident');
+assert.equal(shown[1].options.silent, false);
+assert.equal(shown[1].options.data.target, '/?sos=42');
 await event('message', { data: { type: 'SAFEWATCH_PUSH_OWNER', userId: null }, source: { url: origin + '/' } });
 await event('push', { data: { json: () => ({ ...payload, deliveryId: 'after-logout' }) } });
-assert.equal(shown.length, 1);
+assert.equal(shown.length, 2);
 console.log('PASS closed-app notification, sound request, persistent deduplication, account binding and safe SOS navigation');
 
 const token = 'a'.repeat(64), receipts = [], sends = [];

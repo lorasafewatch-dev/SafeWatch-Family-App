@@ -5,9 +5,10 @@ import { postgis } from '../../.tools/alert-tests/node_modules/@electric-sql/pgl
 
 const pg = new PGlite({ extensions: { postgis } });
 const [family, outsider, staff, watch, second] = Array.from({ length: 5 }, (_, i) => '91000000-0000-0000-0000-' + String(i + 1).padStart(12, '0'));
+const familySession = '91000000-0000-0000-0000-000000000006';
 const q = async (sql, args = []) => (await pg.query(sql, args)).rows;
 async function asUser(id, action, role = 'authenticated') {
-  await q("SELECT set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claims',$2,false)", [id || '', JSON.stringify({ sub: id, aal: 'aal2' })]);
+  await q("SELECT set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claims',$2,false)", [id || '', JSON.stringify({ sub: id, aal: 'aal2', session_id: id === family ? familySession : null })]);
   await pg.exec('SET ROLE ' + role);
   try { return await action(); } finally { await pg.exec('RESET ROLE'); }
 }
@@ -106,6 +107,64 @@ try {
   await asUser(null,()=>assert.rejects(q('SELECT safewatch_private.transfer_unanswered_watch_sos()'),/permission denied/),'anon');
   await assert.rejects(respond(due,'confirmed',outsider),error=>error.code==='42501');
   console.log('PASS family acknowledgment stops automatic transfer; receipts stay family-only and unauthorized accounts cannot run the worker or respond');
+
+  await pg.exec(`ALTER TABLE auth.users ADD COLUMN banned_until TIMESTAMPTZ, ADD COLUMN deleted_at TIMESTAMPTZ;
+    CREATE TABLE auth.sessions(id UUID PRIMARY KEY,user_id UUID REFERENCES auth.users,aal TEXT,not_after TIMESTAMPTZ);
+    CREATE SCHEMA vault;
+    CREATE TABLE vault.decrypted_secrets(name TEXT PRIMARY KEY,decrypted_secret TEXT);`);
+  await q("INSERT INTO auth.sessions(id,user_id,aal) VALUES($1,$2,'aal2')", [familySession,family]);
+  const pushBase = (await readFile(new URL('../migrations/20261119153924_family_sos_background_push.sql',import.meta.url),'utf8'))
+    .replace(/-- BEGIN HOSTED PUSH DISPATCH[\s\S]*?-- END HOSTED PUSH DISPATCH/, '');
+  await pg.exec(pushBase);
+  const reactivation = await readFile(new URL('../migrations/20261119173013_family_sos_reactivation_push.sql',import.meta.url),'utf8');
+  await pg.exec(reactivation);
+  await pg.exec(reactivation);
+  for (const endpoint of ['https://fcm.googleapis.com/wp/synthetic','https://web.push.apple.com/synthetic']) {
+    await asUser(family, () => q('SELECT save_family_push_subscription($1,$2)', [
+      { endpoint, keys: { p256dh: 'B' + 'A'.repeat(86), auth: 'a'.repeat(22) } }, family
+    ]));
+  }
+  const token = 'a'.repeat(64);
+  await q("INSERT INTO vault.decrypted_secrets VALUES('safewatch_family_push_dispatch',$1),('safewatch_family_push_vapid','{}')", [token]);
+  const deliveries = id => q('SELECT * FROM safewatch_private.family_push_deliveries WHERE alert_id=$1 ORDER BY activation_packet_id', [id]);
+  const claimPush = async () => (await q('SELECT claim_family_sos_push($1) AS batch', [token]))[0].batch.deliveries;
+  await packet();
+  const next = await current();
+  assert.equal((await deliveries(next.id)).length,2);
+  const initialPush = await claimPush();
+  assert.equal(initialPush.length,2);
+  assert.ok(initialPush.every(delivery => delivery.payload.reactivated === false));
+  await packet();
+  assert.equal((await deliveries(next.id)).length,2);
+  await respond(next,'declined');
+  await packet(watch,0,false);
+  await packet(watch,0,false);
+  const marker = (await q('SELECT clock_timestamp() at'))[0].at;
+  await packet();
+  await packet();
+  // A buffered older packet arriving later must not ring again.
+  await q("INSERT INTO telemetry(device_id,is_sos,received_at,created_at,rx_uptime_ms) VALUES($1,true,$2,clock_timestamp(),1000)",[watch,marker]);
+  const rows = await deliveries(next.id);
+  assert.equal(rows.length,4);
+  assert.equal(new Set(rows.map(d => d.activation_packet_id)).size,2);
+  assert.equal((await current()).id,next.id);
+  assert.equal((await current()).details.sos_family_deadline_at,next.details.sos_family_deadline_at);
+  assert.equal((await current()).details.sos_transfer_reason,'family_unavailable');
+  assert.deepEqual((await current()).details.sos_location,next.details.sos_location);
+  const repeatedPush = await claimPush();
+  assert.equal(repeatedPush.length,2);
+  assert.ok(repeatedPush.every(delivery => delivery.payload.reactivated === true && delivery.payload.alertId === String(next.id)));
+  await packet(watch,0,false);
+  await packet();
+  await respond(await current(),'confirmed',staff,'barangay');
+  assert.equal((await claimPush()).length,0,'acknowledgment cancels reactivation delivery still in the queue');
+  await packet(watch,0,false);
+  await packet();
+  const fresh = await current();
+  assert.notEqual(fresh.id,next.id);
+  assert.equal((await deliveries(fresh.id)).length,2);
+  assert.ok((await claimPush()).every(delivery => delivery.payload.reactivated === false && delivery.payload.alertId === String(fresh.id)));
+  console.log('PASS SOS stop and reactivation rings both subscribed devices without moving the deadline, GPS pin, or barangay handoff');
 } catch (error) { console.error(JSON.stringify({ message: error.message, code: error.code, detail: error.detail, where: error.where })); process.exitCode=1; }
 finally { await pg.close(); }
 

@@ -40,12 +40,15 @@ self.addEventListener('push', event => {
     const receiptCache = await caches.open(PUSH_RECEIPTS);
     const receipt = new URL(`/__safewatch_push_receipt/${encodeURIComponent(data.deliveryId)}`, self.location.origin).href;
     if (await receiptCache.match(receipt)) return;
+    const reactivated = data.kind === 'sos' && data.reactivated === true;
     await self.registration.showNotification(data.kind === 'test' ? 'SafeWatch notification test' : 'SafeWatch · SOS alert', {
       body: data.kind === 'test' ? 'Background notifications are working. Tap to open SafeWatch.'
+        : reactivated ? 'A linked senior’s watch activated SOS again. Tap to view the alert.'
         : 'A linked senior’s watch sent an SOS. Tap to open the alert and respond.',
       icon: '/icons/family-192-v2.png',
       badge: '/icons/notification-badge.svg',
-      tag: data.kind === 'test' ? `safewatch-test-${data.deliveryId}` : `safewatch-sos-${data.alertId}`,
+      tag: data.kind === 'test' ? `safewatch-test-${data.deliveryId}`
+        : reactivated ? `safewatch-sos-${data.alertId}-${data.deliveryId}` : `safewatch-sos-${data.alertId}`,
       silent: false, renotify: false, requireInteraction: true,
       vibrate: [300, 150, 300, 150, 500],
       timestamp: Date.parse(data.createdAt) || Date.now(),

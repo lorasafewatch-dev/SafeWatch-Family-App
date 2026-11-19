@@ -16,7 +16,17 @@ await context.addInitScript(() => {
   const fake = { endpoint: 'https://fcm.googleapis.com/wp/synthetic', toJSON: () => ({ endpoint: 'https://fcm.googleapis.com/wp/synthetic', keys: { p256dh: 'B' + 'A'.repeat(86), auth: 'a'.repeat(22) } }), unsubscribe: async () => { subscription = null; return true; } };
   const registration = { active: { postMessage: (_message, ports) => ports?.[0]?.postMessage({ saved: true }) },
     pushManager: { getSubscription: async () => subscription, subscribe: async () => { subscription = fake; return fake; } } };
-  Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { ready: Promise.resolve(registration), getRegistration: async () => registration } });
+  const worker = Object.assign(new EventTarget(), { ready: Promise.resolve(registration),
+    getRegistration: async () => registration, controller: { scriptURL: location.origin + '/sw.js' } });
+  Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: worker });
+  globalThis.emitSosPush = (alertId, userId) => {
+    const event = new Event('message');
+    Object.defineProperties(event, {
+      source: { value: worker.controller },
+      data: { value: { type: 'SAFEWATCH_SOS_PUSH', alertId, userId } },
+    });
+    worker.dispatchEvent(event);
+  };
   Object.defineProperty(globalThis, 'PushManager', { configurable: true, value: class {} });
   globalThis.permissionRequests = 0;
   Object.defineProperty(globalThis, 'Notification', { configurable: true, value: { permission: 'default', requestPermission: async () => {
@@ -84,6 +94,9 @@ try {
   await page.getByRole('button', { name: 'Profile', exact: true }).tap();
   await settings.getByRole('button', { name: 'Enable SOS notifications', exact: true }).waitFor();
   assert.equal(await setup.count(), 0, 'deferring is remembered across sessions');
+  await page.evaluate(() => globalThis.emitSosPush('1', globalThis.monitoringFixture.requests[0].user_id));
+  await page.getByRole('alert').filter({ hasText: 'Watch SOS received' }).getByRole('button', { name: 'View SOS' }).tap();
+  await page.getByRole('dialog', { name: 'Alert details', exact: true }).waitFor();
   const apple = await browser.newContext({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', viewport: { width: 390, height: 844 } });
   const iphone = await apple.newPage();
   await iphone.goto(base);

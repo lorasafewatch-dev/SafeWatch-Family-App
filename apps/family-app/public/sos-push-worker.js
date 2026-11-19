@@ -41,7 +41,15 @@ self.addEventListener('push', event => {
     const receipt = new URL(`/__safewatch_push_receipt/${encodeURIComponent(data.deliveryId)}`, self.location.origin).href;
     if (await receiptCache.match(receipt)) return;
     const reactivated = data.kind === 'sos' && data.reactivated === true;
-    await self.registration.showNotification(data.kind === 'test' ? 'SafeWatch notification test' : 'SafeWatch · SOS alert', {
+    const notifyOpenApp = async () => {
+      if (data.kind !== 'sos') return;
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const window of windows) {
+        if (window.visibilityState !== 'visible' || new URL(window.url).origin !== self.location.origin) continue;
+        window.postMessage({ type: 'SAFEWATCH_SOS_PUSH', alertId: String(data.alertId), userId: data.userId });
+      }
+    };
+    const notification = self.registration.showNotification(data.kind === 'test' ? 'SafeWatch notification test' : 'SafeWatch · SOS alert', {
       body: data.kind === 'test' ? 'Background notifications are working. Tap to open SafeWatch.'
         : reactivated ? 'A linked senior’s watch activated SOS again. Tap to view the alert.'
         : 'A linked senior’s watch sent an SOS. Tap to open the alert and respond.',
@@ -55,6 +63,8 @@ self.addEventListener('push', event => {
       data: { target },
       actions: [{ action: 'open', title: data.kind === 'test' ? 'Open SafeWatch' : 'Open SOS' }],
     });
+    const [result] = await Promise.allSettled([notification, notifyOpenApp()]);
+    if (result.status === 'rejected') throw result.reason;
     await receiptCache.put(receipt, new Response(String(Date.now())));
     const keys = await receiptCache.keys();
     for (const key of keys.slice(0, Math.max(0, keys.length - 100))) await receiptCache.delete(key);

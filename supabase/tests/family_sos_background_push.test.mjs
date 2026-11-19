@@ -105,4 +105,27 @@ try {
   assert.equal(batch.deliveries.length, 12);
   assert.ok(batch.deliveries.every(item => item.payload.alertId === String(multiple) && item.payload.userId === outsider));
   console.log('PASS cross-provider endpoints, one delivery per authorized subscription, and more than ten devices');
+
+  await pg.exec(`
+    CREATE TABLE push_wake_calls(id BIGINT GENERATED ALWAYS AS IDENTITY);
+    CREATE FUNCTION safewatch_private.dispatch_family_sos_push() RETURNS VOID LANGUAGE plpgsql AS $$
+    BEGIN INSERT INTO public.push_wake_calls DEFAULT VALUES; END $$;
+  `);
+  const faster = await readFile(new URL('../migrations/20261119174044_expedite_family_sos_push.sql',import.meta.url),'utf8');
+  await pg.exec(faster);
+  const outsiderSub = (await q("select id from safewatch_private.family_push_subscriptions where endpoint='https://fcm.googleapis.com/wp/other'"))[0].id;
+  const immediate = (await asUser(outsider, () => q('select request_family_push_test($1) id',[outsiderSub])))[0].id;
+  assert.equal((await q('select count(*)::int count from push_wake_calls'))[0].count,1);
+  const immediateBatch = await claim();
+  const testDelivery = immediateBatch.deliveries.find(item => item.id===immediate);
+  assert.ok(testDelivery,'the test is claimable without a deliberate wait');
+  await service(() => q('select finish_family_sos_push($1,$2,$3,201)',[immediate,testDelivery.lease,'sent']));
+  assert.ok((await q('select finished_at from safewatch_private.family_push_deliveries where id=$1',[immediate]))[0].finished_at);
+  await insert(otherWatch);
+  assert.equal((await q('select count(*)::int count from push_wake_calls'))[0].count,2,'one wake per batch of SOS recipients');
+  await pg.exec(`CREATE OR REPLACE FUNCTION safewatch_private.dispatch_family_sos_push() RETURNS VOID LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'synthetic wake-up failure'; END $$;`);
+  const fallbackAlert = await insert(otherWatch);
+  assert.equal((await q("select count(*)::int count from safewatch_private.family_push_deliveries where alert_id=$1 and state='pending'",[fallbackAlert]))[0].count,12);
+  console.log('PASS immediate tests and SOS dispatch, completion timing, and durable retry fallback');
 } finally { await pg.close(); }

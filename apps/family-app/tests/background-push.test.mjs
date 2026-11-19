@@ -48,12 +48,17 @@ await event('push', { data: { json: () => ({ ...payload, deliveryId: 'wrong-user
 await event('push', { data: { json: () => ({ ...payload, deliveryId: 'old', expiresAt: '2000-01-01' }) } });
 assert.equal(shown.length, 1);
 const reactivated = { ...payload, reactivated: true, deliveryId: 'delivery-42-reactivated' };
+const foregroundMessages = [];
+windows = [{ url: origin + '/', visibilityState: 'visible', postMessage: message => foregroundMessages.push(message) }];
 await event('push', { data: { json: () => reactivated } });
 await event('push', { data: { json: () => reactivated } });
 assert.equal(shown.length, 2, 'a new activation gets one fresh notification and duplicate retries stay suppressed');
 assert.notEqual(shown[1].options.tag, shown[0].options.tag, 'the OS can alert again for the same incident');
 assert.equal(shown[1].options.silent, false);
 assert.equal(shown[1].options.data.target, '/?sos=42');
+assert.equal(foregroundMessages.length, 1);
+assert.equal(foregroundMessages[0].type, 'SAFEWATCH_SOS_PUSH');
+assert.equal(foregroundMessages[0].alertId, '42');
 await event('message', { data: { type: 'SAFEWATCH_PUSH_OWNER', userId: null }, source: { url: origin + '/' } });
 await event('push', { data: { json: () => ({ ...payload, deliveryId: 'after-logout' }) } });
 assert.equal(shown.length, 2);

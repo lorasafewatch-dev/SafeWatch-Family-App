@@ -50,6 +50,7 @@ function App({ client } = {}) {
   const [pushTargetId, setPushTargetId] = useState(() => sosIdFromUrl(window.location.href));
   const [pushIncident, setPushIncident] = useState(null);
   const [pushTargetError, setPushTargetError] = useState('');
+  const [foregroundSosId, setForegroundSosId] = useState(null);
   const [now, setNow] = useState(Date.now());
   const [familyAlerts, setFamilyAlerts] = useState([]);
   const [sosResponses, setSosResponses] = useState([]);
@@ -76,6 +77,7 @@ function App({ client } = {}) {
   const alertMemory = React.useRef({ incidents: [], ledger: {} });
   const alertsRequest = React.useRef(0);
   const alertsBusy = React.useRef(false);
+  const pendingAlertRefresh = React.useRef(false);
   const sosResponsesRequest = React.useRef(0);
   const sosResponsesBusy = React.useRef(false);
   const pendingTone = React.useRef(null);
@@ -99,6 +101,7 @@ function App({ client } = {}) {
     setLogoutRequested(false);
     setNotificationDetails(null);
     setSosNotice(null);
+    setForegroundSosId(null);
     alertMemory.current = { incidents: [], ledger: {} };
     lastGpsByDevice.current = new Map();
     telemetryRequest.current += 1;
@@ -107,6 +110,7 @@ function App({ client } = {}) {
     setTelemetry(EMPTY_TELEMETRY);
     alertsRequest.current += 1;
     alertsBusy.current = false;
+    pendingAlertRefresh.current = false;
     sosResponsesRequest.current += 1;
     sosResponsesBusy.current = false;
     setFamilyAlerts([]);
@@ -383,8 +387,13 @@ function App({ client } = {}) {
     } finally { if (request === sosResponsesRequest.current) sosResponsesBusy.current = false; }
   };
 
-  const fetchFamilyAlerts = async () => {
-    if (!isLoggedIn || confirmationBusy.current || alertsBusy.current) return;
+  const fetchFamilyAlerts = async (refreshAfterPending = false) => {
+    if (!isLoggedIn) return;
+    if (confirmationBusy.current || alertsBusy.current) {
+      if (refreshAfterPending) pendingAlertRefresh.current = true;
+      return;
+    }
+    pendingAlertRefresh.current = false;
     alertsBusy.current = true;
     setNotificationsLoading(true);
     fetchSosResponseUpdates();
@@ -431,10 +440,17 @@ function App({ client } = {}) {
     } catch (error) {
       console.error('Error fetching family alerts:', error.message);
       if (requestId === alertsRequest.current) setNotificationsError('Pending alerts could not be refreshed. Check your connection and retry.');
-    } finally { if (requestId === alertsRequest.current) { alertsBusy.current = false; setNotificationsLoading(false); } }
+    } finally {
+      if (requestId === alertsRequest.current) {
+        alertsBusy.current = false;
+        setNotificationsLoading(false);
+        if (pendingAlertRefresh.current) fetchFamilyAlerts();
+      }
+    }
   };
 
   const commitConfirmation = incident => {
+    setForegroundSosId(id => id === String(incident.id) ? null : id);
     setPushIncident(current => String(current?.id) === String(incident.id) ? null : current);
     setPushTargetId(current => current === String(incident.id) ? null : current);
     confirmedKeys.current.add(incident.key);
@@ -535,26 +551,44 @@ function App({ client } = {}) {
       fetchFamilyAlerts();
     }, 5000);
 
-    // Subscribe to new telemetry and alerts
+    const refreshVisible = () => { if (!document.hidden) fetchFamilyAlerts(true); };
+    const serviceWorker = navigator.serviceWorker;
+    const openAppPush = event => {
+      const controller = serviceWorker?.controller;
+      const payload = event.data;
+      if (!controller || event.source?.scriptURL !== controller.scriptURL
+          || payload?.type !== 'SAFEWATCH_SOS_PUSH' || payload.userId !== userId
+          || typeof payload.alertId !== 'string' || !/^[1-9]\d{0,18}$/.test(payload.alertId) || document.hidden) return;
+      setForegroundSosId(payload.alertId);
+      fetchFamilyAlerts(true);
+    };
+    serviceWorker?.addEventListener?.('message', openAppPush);
+    document.addEventListener('visibilitychange', refreshVisible);
+    window.addEventListener('online', refreshVisible);
+
     const subscription = supabase
       .channel('public:telemetry')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' }, () => {
         fetchLiveTelemetry();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, () => {
-        fetchFamilyAlerts();
+        fetchFamilyAlerts(true);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'devices' }, () => {
         fetchFamilyAlerts();
       })
-      .subscribe();
+      .subscribe(status => { if (status === 'SUBSCRIBED') refreshVisible(); });
 
     return () => {
       telemetryRequest.current += 1;
       telemetryBusy.current = false;
       alertsRequest.current += 1;
       alertsBusy.current = false;
+      pendingAlertRefresh.current = false;
       clearInterval(timer);
+      serviceWorker?.removeEventListener?.('message', openAppPush);
+      document.removeEventListener('visibilitychange', refreshVisible);
+      window.removeEventListener('online', refreshVisible);
       supabase.removeChannel(subscription);
     };
   }, [isLoggedIn, userId, selectedDeviceId, linkedIdKey]);
@@ -686,6 +720,11 @@ function App({ client } = {}) {
       )}
       <main className="nature-content" ref={contentRef}>
         {pushTargetError && <p role="alert" className="nature-notice">{pushTargetError}<button type="button" onClick={closePushTarget} className="ml-3 underline">Dismiss</button></p>}
+        {foregroundSosId && !popupAlert && !pushTargetId && <div role="alert" className="sos-response-notice">
+          <p>Watch SOS received</p>
+          <button type="button" className="mt-2 font-bold underline" onClick={() => { setPushTargetId(foregroundSosId); setForegroundSosId(null); }}>View SOS</button>
+          <button type="button" className="ml-4 mt-2 underline" onClick={() => setForegroundSosId(null)}>Dismiss</button>
+        </div>}
         {sosNotice && linkedSeniors.some(item => item.id === sosNotice.deviceId) && <div role="status" className="sos-response-notice"><p>{sosNotice.message}</p><button type="button" onClick={() => { setView('alerts'); setSosNotice(null); }} className="mt-2 font-bold underline">View SOS updates</button><button type="button" onClick={() => setSosNotice(null)} className="ml-4 mt-2 underline">Dismiss</button></div>}
         <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length} notifications={{ app: 'family', userId, alerts: familyAlerts, responses: sosResponses, requests: accessNotifications.requests, loading: notificationsLoading, blocked: !!popupAlert, error: [notificationsError, sosResponsesError, accessNotifications.error].filter(Boolean).join(' '), onRefresh: () => { fetchFamilyAlerts(); accessNotifications.refresh(); }, onOpenNotification: item => { if (item.category === 'access') { setView('seniors'); return; } setView('alerts'); if (item.active) setPopupKey(item.incident.key); else setNotificationDetails(item.incident); } }}/>
         {view === 'dashboard' && <SosNotificationSettings push={push} compact/>}
@@ -696,7 +735,7 @@ function App({ client } = {}) {
       </main>
       <FamilyNavigation view={view} setView={setView}/>
       <SosNotificationSetup key={userId} userId={userId} push={push}
-        paused={seniorListLoading || !!(popupAlert || activeAlert?.alert_type === 'SOS' || pushTargetId || notificationDetails || logoutRequested)}/>
+        paused={seniorListLoading || !!(popupAlert || activeAlert?.alert_type === 'SOS' || foregroundSosId || pushTargetId || notificationDetails || logoutRequested)}/>
       {logoutRequested && <LogoutConfirmation client={supabase} app="family" onCancel={() => setLogoutRequested(false)} onLoggedOut={() => { setLogoutRequested(false); setView('dashboard'); }}/>}
       <AlertWarning incident={popupAlert} now={now} onConfirm={handleAcknowledgeAlert} onDecline={incident => handleSosResponse(incident, 'declined')}
         onMinimize={() => { closePushTarget(); setPopupKey(null); }} busy={!!confirmingKey} error={alertError}

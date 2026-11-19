@@ -85,7 +85,7 @@ export default function useFamilyPush(client, userId) {
     test: () => perform(async owner => {
       const { error: err } = await client.rpc('request_family_push_test', { p_subscription_id: subscriptionId.current });
       if (err) throw err;
-      if (currentUser.current === owner) setNotice('Test scheduled. You can close SafeWatch; a test notification will arrive shortly.');
+      if (currentUser.current === owner) setNotice('Test requested. Check your device’s notification center.');
     }),
   };
 }

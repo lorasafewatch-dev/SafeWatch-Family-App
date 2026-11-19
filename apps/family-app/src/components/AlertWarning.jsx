@@ -1,12 +1,10 @@
 import { AlertCircle, BatteryLow, MapPin } from 'lucide-react';
-import { alertClock, alertTitle, batteryAlertMessage } from '../../../shared/alertLifecycle.js';
+import { alertClock, alertTitle, batteryAlertMessage, formatDuration } from '../../../shared/alertLifecycle.js';
 import { SosResponseIndicator } from '../../../shared/components/SosResponseStatus.jsx';
 import { sosResponseState } from '../../../shared/sosResponse.js';
 import SosLocation from '../../../shared/components/SosLocation.jsx';
 import SeniorPhoto from '../../../shared/components/SeniorPhoto.jsx';
 import { dialogKeyboard } from '../../../shared/dialogKeyboard.js';
-
-export const formatDuration = seconds => `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
 
 export default function AlertWarning({ incident, now, onConfirm, onDecline, onMinimize,
   busy = false, error = '', soundsBlocked = false, onEnableSounds }) {
@@ -15,7 +13,7 @@ export default function AlertWarning({ incident, now, onConfirm, onDecline, onMi
   const isSos = incident.alert_type === 'SOS';
   const battery = incident.alert_type === 'LOW_BATTERY';
   const response = sosResponseState(incident);
-  const handedOff = isSos && !!response.assigned;
+  const handedOff = isSos && (response.transferred || ['barangay', 'both'].includes(response.assigned) || !!response.responses.barangay);
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6" onKeyDown={event => dialogKeyboard(event, onMinimize)}>
       <div role="alertdialog" aria-modal="true" aria-labelledby="incident-title"
@@ -32,15 +30,15 @@ export default function AlertWarning({ incident, now, onConfirm, onDecline, onMi
         <div className="p-6 text-center space-y-4">
           {isSos && <><div className="senior-feature-person"><SeniorPhoto deviceId={incident.device_id}/><strong>{incident.devices?.patient_name || 'Your family member'}</strong></div><SosLocation incident={incident}/></>}
           <p id="incident-message" className="text-sm font-bold text-slate-800">
-            {handedOff ? response.message : battery ? batteryAlertMessage(incident) : clock.escalated ? 'The response window has elapsed. This alert needs Barangay attention.'
+            {handedOff ? response.message : battery ? batteryAlertMessage(incident) : isSos && clock.escalated ? 'The family response window has elapsed. Automatic transfer to barangay is pending.' : clock.escalated ? 'The response window has elapsed. This alert needs Barangay attention.'
               : clock.warning ? 'Time is running out. Please confirm before the response window ends.'
-              : 'Please check your family member and confirm this alert.'}
+              : isSos ? 'Your family member’s watch sent an SOS. Respond here or transfer it to barangay.' : 'Please check your family member and confirm this alert.'}
           </p>
           {!battery && !handedOff && <><div className="text-4xl font-black text-red-500 tabular-nums" aria-live="off">
             {formatDuration(clock.remainingSeconds)}
           </div>
           <p className="text-xs text-slate-500">
-            {clock.escalated ? 'Response window elapsed' : 'Time remaining before Barangay escalation'}
+            {clock.escalated ? 'Response window elapsed' : isSos ? 'Time remaining before automatic transfer to barangay' : 'Time remaining before Barangay escalation'}
             <br />Unconfirmed for {formatDuration(clock.elapsedSeconds)}
           </p></>}
           <SosResponseIndicator incident={incident}/>
@@ -48,12 +46,12 @@ export default function AlertWarning({ incident, now, onConfirm, onDecline, onMi
           {soundsBlocked && <button onClick={onEnableSounds} className="text-xs font-bold text-orange-700 underline">Enable alert sounds</button>}
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           <button autoFocus data-confirm-alert disabled={busy} onClick={() => onConfirm(incident)}
-            className={`w-full py-4 text-white font-black rounded-2xl text-sm disabled:opacity-50 ${isSos ? 'bg-red-500' : 'bg-orange-500'}`}>
-            {busy ? 'Saving response…' : isSos ? 'Confirm response' : 'Confirm I have checked'}
+            className={`w-full py-4 text-white font-black rounded-2xl text-sm disabled:opacity-50 ${isSos ? 'bg-emerald-600' : 'bg-orange-500'}`}>
+            {busy ? 'Saving response…' : isSos ? 'I can respond' : 'Confirm I have checked'}
           </button>
-          {isSos && onDecline && <button type="button" data-confirm-alert disabled={busy || response.responses.family?.decision === 'declined'} onClick={() => onDecline(incident)} className="sos-decline-button w-full">{response.responses.family?.decision === 'declined' ? 'Barangay already notified' : 'Can’t respond — notify barangay'}</button>}
+          {isSos && onDecline && <button type="button" data-confirm-alert disabled={busy || response.responses.family?.decision === 'declined'} onClick={() => onDecline(incident)} className="sos-decline-button w-full">{response.responses.family?.decision === 'declined' ? 'Barangay already notified' : 'Transfer SOS to barangay'}</button>}
           <button onClick={onMinimize} className="text-sm font-bold text-slate-600">Keep monitoring</button>
-          <p className="text-xs text-slate-400">{isSos ? 'If you cannot reach the senior, notify the barangay secretary or admin immediately. The SOS stays open until someone confirms a response.' : battery ? 'This alert stays active until confirmed or the battery recovers.' : 'Keeping this window closed does not confirm the alert or stop its timer.'}</p>
+          <p className="text-xs text-slate-400">{isSos ? 'Family is notified first. Transfer the SOS if you cannot respond. With no family response, it transfers to barangay automatically after 3 minutes.' : battery ? 'This alert stays active until confirmed or the battery recovers.' : 'Keeping this window closed does not confirm the alert or stop its timer.'}</p>
         </div>
       </div>
     </div>

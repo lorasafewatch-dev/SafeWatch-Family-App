@@ -1,6 +1,5 @@
 import { AlertTriangle, BatteryLow, Bell, MapPin, ShieldCheck } from 'lucide-react';
-import { alertClock, alertTitle, batteryAlertMessage } from '../../../shared/alertLifecycle.js';
-import { formatDuration } from './AlertWarning.jsx';
+import { alertClock, alertTitle, batteryAlertMessage, formatDuration } from '../../../shared/alertLifecycle.js';
 import { FamilyPageTitle } from './FamilyNatureUI.jsx';
 import SosResponseUpdates, { SosResponseIndicator } from '../../../shared/components/SosResponseStatus.jsx';
 import { sosResponseState } from '../../../shared/sosResponse.js';
@@ -26,12 +25,12 @@ export default function FamilyAlerts({ client, seniors = [], senior, familyAlert
         <span className="nature-alert__icon"><Icon aria-hidden="true"/></span>
         <div className="nature-alert__body"><div className="senior-feature-person"><SeniorPhoto deviceId={alert.device_id}/><p className="nature-alert__name">{alert.devices?.patient_name || senior.name}</p></div>
           <h3>{alertTitle(alert)}</h3><p>{battery ? batteryAlertMessage(alert) : `Unconfirmed for ${formatDuration(clock.elapsedSeconds)}`}</p>
-          <strong className="nature-alert__timer">{sos && response.assigned ? response.message : battery ? 'Charge the watch soon' : clock.escalated ? 'Barangay attention required' : `${formatDuration(clock.remainingSeconds)} remaining`}</strong>
+          <strong className="nature-alert__timer">{sos && response.waitingForFamily ? clock.escalated ? 'Automatic transfer pending' : `${formatDuration(clock.remainingSeconds)} before automatic transfer` : sos && response.assigned ? response.message : battery ? 'Charge the watch soon' : clock.escalated ? 'Barangay attention required' : `${formatDuration(clock.remainingSeconds)} remaining`}</strong>
           <SosResponseIndicator incident={alert}/>
           <button type="button" onClick={() => setDetails(alert)}>View details</button>
           <p className="nature-alert__date">Latest update: {new Date(alert.details.last_seen_at).toLocaleTimeString()}</p>
-          <button type="button" data-confirm-alert disabled={!!confirmingKey} onClick={() => handleAcknowledge(alert)}>{confirmingKey === alert.key ? 'Saving response…' : sos ? 'Confirm response' : 'Confirm I have checked'}</button>
-          {sos && handleDecline && <><p>Cannot reach the senior? Notify the barangay secretary or admin immediately.</p><button type="button" className="sos-decline-button" data-confirm-alert disabled={!!confirmingKey || response.responses.family?.decision === 'declined'} onClick={() => handleDecline(alert)}>{response.responses.family?.decision === 'declined' ? 'Barangay already notified' : 'Can’t respond — notify barangay'}</button></>}
+          <button type="button" data-confirm-alert disabled={!!confirmingKey} onClick={() => handleAcknowledge(alert)}>{confirmingKey === alert.key ? 'Saving response…' : sos ? 'I can respond' : 'Confirm I have checked'}</button>
+          {sos && handleDecline && <><p>Family is notified first. If you cannot respond, transfer this SOS to barangay. Unanswered SOS alerts transfer automatically after 3 minutes.</p><button type="button" className="sos-decline-button" data-confirm-alert disabled={!!confirmingKey || response.responses.family?.decision === 'declined'} onClick={() => handleDecline(alert)}>{response.responses.family?.decision === 'declined' ? 'Barangay already notified' : 'Transfer SOS to barangay'}</button></>}
           <time dateTime={alert.created_at}>{new Date(alert.created_at).toLocaleString()}</time>
         </div></article>;
     })}

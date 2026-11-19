@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { telemetryTimestamp } from '../../shared/gpsStatus.js';
 import { gpsObservation, retainGpsObservation, loadLastGpsObservation } from '../../shared/gpsLocation.js';
-import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, alertTitle, batteryAlertMessage, confirmationErrorMessage, groupAlertIncidents, incidentSnapshot, planAlertSounds } from '../../shared/alertLifecycle.js';
+import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, alertTitle, batteryAlertMessage, confirmationErrorMessage, formatDuration, groupAlertIncidents, incidentSnapshot, planAlertSounds } from '../../shared/alertLifecycle.js';
 import { enableAlertSounds, playAlertSound, stopAlertSounds } from '../../shared/alertSound.js';
 import { isFamilyActionable, loadSosResponses, mergeSosResponse, respondToSos, sosResponseError, sosResponseState } from '../../shared/sosResponse.js';
-import AlertWarning, { formatDuration } from './components/AlertWarning.jsx';
+import AlertWarning from './components/AlertWarning.jsx';
 import LocationView from './components/LocationView.jsx';
 import ProfileView from './components/ProfileView.jsx';
 import DashboardView from './components/FamilyHome.jsx';
@@ -50,6 +50,7 @@ function App({ client } = {}) {
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [notificationsError, setNotificationsError] = useState('');
   const [popupKey, setPopupKey] = useState(null);
+  const [sosNotice, setSosNotice] = useState(null);
   const [notificationDetails, setNotificationDetails] = useState(null);
   const accessNotifications = useFamilyRequestNotifications(supabase, isLoggedIn ? userId : null, 'family');
   const [confirmingKey, setConfirmingKey] = useState(null);
@@ -90,6 +91,7 @@ function App({ client } = {}) {
   useEffect(() => {
     setLogoutRequested(false);
     setNotificationDetails(null);
+    setSosNotice(null);
     alertMemory.current = { incidents: [], ledger: {} };
     lastGpsByDevice.current = new Map();
     telemetryRequest.current += 1;
@@ -417,6 +419,7 @@ function App({ client } = {}) {
       alertMemory.current.incidents = incidentSnapshot(incidents);
       saveAlertMemory();
       setFamilyAlerts(incidents);
+      setSosNotice(current => current && incidents.some(incident => incident.alert_type === 'SOS' && String(incident.id) !== String(current.incidentId)) ? null : current);
       setNotificationsError('');
     } catch (error) {
       console.error('Error fetching family alerts:', error.message);
@@ -473,6 +476,7 @@ function App({ client } = {}) {
       const updated = await respondToSos(supabase, incident, decision, 'family');
       setSosResponses(current => mergeSosResponse(current, updated));
       commitConfirmation(incident);
+      setSosNotice({ incidentId: incident.id, deviceId: incident.device_id, message: decision === 'declined' ? 'SOS transferred to barangay. Waiting for a response.' : updated.details?.sos_responses?.family?.by === userId ? 'Your response was saved. The unanswered SOS timer has stopped.' : sosResponseState(updated).message });
     } catch (error) { setAlertError(sosResponseError(error)); }
     finally {
       confirmationBusy.current = false;
@@ -628,6 +632,7 @@ function App({ client } = {}) {
         </div>
       )}
       <main className="nature-content" ref={contentRef}>
+        {sosNotice && linkedSeniors.some(item => item.id === sosNotice.deviceId) && <div role="status" className="sos-response-notice"><p>{sosNotice.message}</p><button type="button" onClick={() => { setView('alerts'); setSosNotice(null); }} className="mt-2 font-bold underline">View SOS updates</button><button type="button" onClick={() => setSosNotice(null)} className="ml-4 mt-2 underline">Dismiss</button></div>}
         <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length} notifications={{ app: 'family', userId, alerts: familyAlerts, responses: sosResponses, requests: accessNotifications.requests, loading: notificationsLoading, blocked: !!popupAlert, error: [notificationsError, sosResponsesError, accessNotifications.error].filter(Boolean).join(' '), onRefresh: () => { fetchFamilyAlerts(); accessNotifications.refresh(); }, onOpenNotification: item => { if (item.category === 'access') { setView('seniors'); return; } setView('alerts'); if (item.active) setPopupKey(item.incident.key); else setNotificationDetails(item.incident); } }}/>
         {!['profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-manage-watches"><button type="button" onClick={() => setView('seniors')}>Manage watches</button></div>}
         {view !== 'profile' && seniorListError && <p role="alert" className="nature-notice">{seniorListError}</p>}

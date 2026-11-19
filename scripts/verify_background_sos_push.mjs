@@ -29,7 +29,8 @@ await context.addInitScript(() => {
   };
   Object.defineProperty(globalThis, 'PushManager', { configurable: true, value: class {} });
   globalThis.permissionRequests = 0;
-  Object.defineProperty(globalThis, 'Notification', { configurable: true, value: { permission: 'default', requestPermission: async () => {
+  const permission = new URL(location.href).searchParams.get('notification_permission') === 'granted' ? 'granted' : 'default';
+  Object.defineProperty(globalThis, 'Notification', { configurable: true, value: { permission, requestPermission: async () => {
     globalThis.permissionRequests += 1;
     globalThis.Notification.permission = globalThis.rejectPermission ? 'denied' : 'granted';
     return globalThis.Notification.permission;
@@ -65,6 +66,10 @@ try {
   await settings.getByRole('button', { name: 'Turn off on this device', exact: true }).tap();
   await settings.getByRole('button', { name: 'Enable SOS notifications', exact: true }).waitFor();
   assert.equal(await setup.count(), 0);
+  await page.goto(base + '?notification_permission=granted');
+  await page.getByRole('button', { name: 'Profile', exact: true }).tap();
+  await settings.getByRole('button', { name: 'Enable SOS notifications', exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => globalThis.monitoringFixture.pushSaves || 0), 0, 'an explicit opt-out survives reopening');
   // A cold notification click can target completed history outside the active list.
   await page.goto(base + '?sos=1');
   await page.getByRole('dialog', { name: 'Alert details', exact: true }).waitFor();
@@ -103,6 +108,13 @@ try {
   const signOut = page.getByRole('dialog', { name: 'Log out on this device?' });
   await signOut.getByRole('button', { name: 'Confirm logout', exact: true }).tap();
   await page.waitForFunction(() => globalThis.monitoringFixture.signOutScope === 'local');
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(base + '?notification_permission=granted');
+  await page.getByRole('button', { name: 'Profile', exact: true }).tap();
+  await settings.getByText('Enabled on this device', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => globalThis.permissionRequests), 0, 'a granted browser connects at sign-in without prompting');
+  assert.ok(await page.evaluate(() => globalThis.monitoringFixture.pushSaves > 0));
+  assert.equal(await setup.count(), 0);
   const apple = await browser.newContext({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', viewport: { width: 390, height: 844 } });
   const iphone = await apple.newPage();
   await iphone.goto(base);

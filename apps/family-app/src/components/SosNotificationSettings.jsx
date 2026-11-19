@@ -44,7 +44,7 @@ export default function SosNotificationSettings({ push, compact = false, onLater
 export function SosNotificationSetup({ push, userId, paused }) {
   const dialog = useRef(null);
   const [dismissed, setDismissed] = useState(() => {
-    try { return localStorage.getItem(notificationSetupKey(userId)) === 'done'; }
+    try { return localStorage.getItem(notificationSetupKey(userId)) !== null; }
     catch { return false; }
   });
   const open = !paused && !dismissed && ['off', 'blocked', 'install'].includes(push.status);
@@ -58,7 +58,7 @@ export function SosNotificationSetup({ push, userId, paused }) {
     return () => { element.close(); };
   }, [open]);
   const later = () => {
-    rememberNotificationSetup(userId);
+    rememberNotificationSetup(userId, 'later');
     setDismissed(true);
   };
   if (!open) return null;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { disableFamilyPush, enableFamilyPush, PUSH_OWNER_KEY, pushAvailability, pushError, pushRegistration, savePushSubscription } from '../familyPush.js';
+import { canConnectPushAutomatically, clearSignedOutPush, connectFamilyPush, disableFamilyPush, enableFamilyPush, pushAvailability, pushError } from '../familyPush.js';
 
 export default function useFamilyPush(client, userId) {
   const [status, setStatus] = useState(pushAvailability);
@@ -25,28 +25,19 @@ export default function useFamilyPush(client, userId) {
     });
     if (!userId) {
       // A signed-out device must not retain a previous family's notification UI.
-      navigator.serviceWorker.getRegistration().then(async registration => {
-        if (!registration || currentUser.current) return;
-        registration.active?.postMessage({ type: 'SAFEWATCH_PUSH_OWNER', userId: null });
-        await (await registration.pushManager.getSubscription())?.unsubscribe();
-        localStorage.removeItem(PUSH_OWNER_KEY);
-      }).catch(() => {});
+      clearSignedOutPush(() => currentUser.current === null).catch(() => {});
       return;
     }
     let checking = false;
     const check = async () => {
       if (checking || operation.current) return;
-      if (Notification.permission !== 'granted' || localStorage.getItem(PUSH_OWNER_KEY) !== userId) {
+      if (Notification.permission !== 'granted' || !canConnectPushAutomatically(userId)) {
         if (active) setStatus(Notification.permission === 'denied' ? 'blocked' : 'off');
         return;
       }
       checking = true;
       try {
-        const registration = await pushRegistration();
-        const subscription = await registration.pushManager.getSubscription();
-        if (!active) return;
-        if (!subscription) { setStatus('off'); return; }
-        const id = await savePushSubscription(client, userId, registration, subscription);
+        const id = await connectFamilyPush(client, userId, () => active && currentUser.current === userId);
         if (active) { subscriptionId.current = id; setStatus('enabled'); setError(''); }
       } catch (err) { if (active) { setError(pushError(err)); setStatus('off'); } }
       finally { checking = false; }
@@ -54,8 +45,14 @@ export default function useFamilyPush(client, userId) {
     check();
     const focus = () => { if (!document.hidden) check(); };
     window.addEventListener('focus', focus);
+    window.addEventListener('online', focus);
     document.addEventListener('visibilitychange', focus);
-    return () => { active = false; window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); };
+    return () => {
+      active = false;
+      window.removeEventListener('focus', focus);
+      window.removeEventListener('online', focus);
+      document.removeEventListener('visibilitychange', focus);
+    };
   }, [client, userId]);
 
   const perform = async action => {
@@ -75,11 +72,11 @@ export default function useFamilyPush(client, userId) {
   };
   return { status, error, notice, busy,
     enable: () => perform(async owner => {
-      const id = await enableFamilyPush(client, owner);
+      const id = await enableFamilyPush(client, owner, () => currentUser.current === owner);
       if (currentUser.current === owner) { subscriptionId.current = id; setStatus('enabled'); setNotice('SOS notifications are enabled on this device.'); }
     }),
     disable: () => perform(async owner => {
-      await disableFamilyPush(client, owner);
+      await disableFamilyPush(client, owner, () => currentUser.current === owner);
       if (currentUser.current === owner) { subscriptionId.current = null; setStatus('off'); }
     }),
     test: () => perform(async owner => {

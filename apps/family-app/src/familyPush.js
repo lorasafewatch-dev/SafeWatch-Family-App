@@ -1,4 +1,15 @@
 export const PUSH_OWNER_KEY = 'safewatch.family.push-owner.v1';
+let registrationWork = Promise.resolve();
+
+function withPushRegistration(work) {
+  const next = registrationWork.then(work);
+  registrationWork = next.catch(() => {});
+  return next;
+}
+
+function requireCurrentSession(isCurrent) {
+  if (!isCurrent()) throw new DOMException('The SafeWatch session changed.', 'AbortError');
+}
 
 export function sosIdFromUrl(url) {
   const value = new URL(url).searchParams.get('sos');
@@ -21,9 +32,20 @@ export function notificationSetupKey(userId) {
   return `safewatch.family.push-setup.v1:${userId}`;
 }
 
-export function rememberNotificationSetup(userId) {
-  try { localStorage.setItem(notificationSetupKey(userId), 'done'); }
+export function rememberNotificationSetup(userId, choice) {
+  try { localStorage.setItem(notificationSetupKey(userId), choice); }
   catch { /* An unavailable preference store should not block notifications. */ }
+}
+
+export function canConnectPushAutomatically(userId) {
+  try {
+    const choice = localStorage.getItem(notificationSetupKey(userId));
+    if (choice === 'off' || choice === 'later') return false;
+    // The old "done" marker covered both activation and turning notifications off.
+    return choice !== 'done' || localStorage.getItem(PUSH_OWNER_KEY) === userId;
+  } catch {
+    return false;
+  }
 }
 
 export function applicationServerKey(value) {
@@ -55,18 +77,45 @@ async function setOwner(registration, userId) {
   });
 }
 
-export async function savePushSubscription(client, userId, registration, subscription) {
+async function savePushSubscription(client, userId, registration, subscription, isCurrent) {
+  requireCurrentSession(isCurrent);
   const { data, error } = await client.rpc('save_family_push_subscription', {
     p_subscription: subscription.toJSON(), p_expected_user_id: userId,
   });
   if (error) throw error;
+  requireCurrentSession(isCurrent);
   await setOwner(registration, userId);
   localStorage.setItem(PUSH_OWNER_KEY, userId);
-  rememberNotificationSetup(userId);
+  rememberNotificationSetup(userId, 'ready');
   return data;
 }
 
-export async function enableFamilyPush(client, userId) {
+export function connectFamilyPush(client, userId, isCurrent) {
+  return withPushRegistration(async () => {
+    requireCurrentSession(isCurrent);
+    if (Notification.permission !== 'granted') throw new Error('Allow SafeWatch notifications to receive SOS alerts.');
+    const registration = await pushRegistration();
+    let subscription = await registration.pushManager.getSubscription();
+    requireCurrentSession(isCurrent);
+    if (subscription && localStorage.getItem(PUSH_OWNER_KEY) !== userId) {
+      await setOwner(registration, null);
+      await subscription.unsubscribe();
+      subscription = null;
+    }
+    if (!subscription) {
+      const { data, error } = await client.rpc('family_push_configuration');
+      if (error) throw error;
+      requireCurrentSession(isCurrent);
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey(data?.publicKey),
+      });
+    }
+    return savePushSubscription(client, userId, registration, subscription, isCurrent);
+  });
+}
+
+export async function enableFamilyPush(client, userId, isCurrent) {
   // Ask while the button's user activation is still available.
   const permission = Notification.permission === 'default'
     ? await Notification.requestPermission() : Notification.permission;
@@ -75,35 +124,40 @@ export async function enableFamilyPush(client, userId) {
       ? 'Allow SafeWatch notifications in your browser or device settings, then try again.'
       : 'Notification permission is still pending. Tap Enable SOS notifications when you’re ready.');
   }
-  const registration = await pushRegistration();
-  const { data, error } = await client.rpc('family_push_configuration');
-  if (error) throw error;
-  const key = applicationServerKey(data?.publicKey);
-  let subscription = await registration.pushManager.getSubscription();
-  if (subscription && localStorage.getItem(PUSH_OWNER_KEY) !== userId) {
-    await setOwner(registration, null);
-    await subscription.unsubscribe();
-    subscription = null;
-  }
-  subscription ||= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-  return savePushSubscription(client, userId, registration, subscription);
+  return connectFamilyPush(client, userId, isCurrent);
 }
 
-export async function disableFamilyPush(client, userId) {
-  const registration = await pushRegistration();
-  const subscription = await registration.pushManager.getSubscription();
-  if (subscription) {
-    const { error } = await client.rpc('remove_family_push_subscription', { p_endpoint: subscription.endpoint });
-    if (error) throw error;
-  }
-  await setOwner(registration, null);
-  if (subscription) await subscription.unsubscribe();
-  if (localStorage.getItem(PUSH_OWNER_KEY) === userId) localStorage.removeItem(PUSH_OWNER_KEY);
-  rememberNotificationSetup(userId);
+export function disableFamilyPush(client, userId, isCurrent) {
+  return withPushRegistration(async () => {
+    requireCurrentSession(isCurrent);
+    const registration = await pushRegistration();
+    const subscription = await registration.pushManager.getSubscription();
+    requireCurrentSession(isCurrent);
+    if (subscription) {
+      const { error } = await client.rpc('remove_family_push_subscription', { p_endpoint: subscription.endpoint });
+      if (error) throw error;
+    }
+    rememberNotificationSetup(userId, 'off');
+    await setOwner(registration, null);
+    if (subscription) await subscription.unsubscribe();
+    if (localStorage.getItem(PUSH_OWNER_KEY) === userId) localStorage.removeItem(PUSH_OWNER_KEY);
+  });
+}
+
+export function clearSignedOutPush(isSignedOut) {
+  return withPushRegistration(async () => {
+    if (!isSignedOut()) return;
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration || !isSignedOut()) return;
+    registration.active?.postMessage({ type: 'SAFEWATCH_PUSH_OWNER', userId: null });
+    await (await registration.pushManager.getSubscription())?.unsubscribe();
+    localStorage.removeItem(PUSH_OWNER_KEY);
+  });
 }
 
 export function pushError(error) {
   if (error?.code === '42501') return 'Sign in with your approved family account to enable SOS notifications.';
   if (['PGRST202', '42883'].includes(error?.code)) return 'SOS notifications are still being set up. Please retry shortly.';
+  if (error?.name === 'NotAllowedError') return 'Tap Enable SOS notifications to finish connecting this device.';
   return error?.message && !error?.code ? error.message : 'SOS notifications could not be updated. Check your connection and retry.';
 }

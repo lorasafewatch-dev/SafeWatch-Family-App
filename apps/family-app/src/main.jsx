@@ -4,6 +4,11 @@ import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.jsx'
 
+// Safari can allow page pinch-zoom even with a fixed viewport scale.
+const preventPageZoom = event => event.preventDefault()
+document.addEventListener('gesturestart', preventPageZoom, { passive: false })
+document.addEventListener('gesturechange', preventPageZoom, { passive: false })
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />

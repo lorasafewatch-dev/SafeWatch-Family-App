@@ -2,6 +2,11 @@
 @source "../../shared/components";
 @config "../tailwind.config.js";
 
+/* Allow page scrolling while leaving Leaflet's map gestures in control. */
+:where(html, body, #root, #root *) {
+  touch-action: pan-x pan-y;
+}
+
 :root {
   font-family: 'Outfit', system-ui, sans-serif;
   background-color: #f8fafc;

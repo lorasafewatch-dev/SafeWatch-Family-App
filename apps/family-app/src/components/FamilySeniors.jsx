@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, Plus, Trash2, Users } from 'lucide-react';
+import { Camera, Check, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import { cancelFamilyRequest, linkFamilySenior, loadFamilyRequests, normalizeWatchId, registerFamilySenior, seniorManagementError, unlinkFamilySenior } from '../../../shared/familySeniors.js';
 import SeniorPhoto from '../../../shared/components/SeniorPhoto.jsx';
+import SeniorPhotoEditor from '../../../shared/components/SeniorPhotoEditor.jsx';
 
 const emptyRegistration = { name: '', watchId: '', age: '', gender: 'Not specified' };
 const inputClass = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 focus:outline-2 focus:outline-emerald-500 disabled:opacity-60';
@@ -16,6 +17,8 @@ export default function FamilySeniors({ client, seniors, selectedDeviceId, loadi
   const [watchId, setWatchId] = useState('');
   const [draft, setDraft] = useState(emptyRegistration);
   const [removing, setRemoving] = useState(null);
+  const [editingPhotoId, setEditingPhotoId] = useState(null);
+  const editingPhoto = seniors.find(senior => senior.id === editingPhotoId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -109,6 +112,8 @@ export default function FamilySeniors({ client, seniors, selectedDeviceId, loadi
           className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
           {selectedDeviceId === senior.id ? 'Selected senior' : 'Monitor this senior'}
         </button>
+        <button type="button" disabled={busy || loading || !!loadError} aria-label={`${senior.photo_path ? 'Edit' : 'Add'} photo for ${senior.patient_name}, Watch ID ${senior.id}`} onClick={() => { setEditingPhotoId(senior.id); setError(''); setMessage(''); }}
+          className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"><Camera className="w-4 h-4" aria-hidden="true"/>{senior.photo_path ? 'Edit photo' : 'Add photo'}</button>
         <button disabled={busy} aria-label={`Remove ${senior.patient_name} from my seniors`} onClick={() => { setRemoving(senior); setError(''); setMessage(''); }}
           className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"><Trash2 className="w-4 h-4" /> Remove watch</button>
       </div>
@@ -134,6 +139,7 @@ export default function FamilySeniors({ client, seniors, selectedDeviceId, loadi
 
     {expanded && <form onSubmit={add} className="mobile-card space-y-5">
       <h4 className="font-bold text-slate-800">Add a senior</h4>
+      <p className="text-xs text-slate-500">Once access is approved, you can add or edit the senior’s photo in My seniors.</p>
       <div className="flex flex-wrap gap-2">
         <button type="button" disabled={busy} aria-pressed={mode === 'existing'} onClick={() => changeMode('existing')}
           className={`rounded-xl px-4 py-2 text-sm font-bold ${mode === 'existing' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>Link existing senior</button>
@@ -171,5 +177,9 @@ export default function FamilySeniors({ client, seniors, selectedDeviceId, loadi
         <button type="button" disabled={busy} onClick={() => { setExpanded(false); setError(''); }} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600">Cancel adding senior</button>
       </div>
     </form>}
+    {editingPhoto && <SeniorPhotoEditor key={editingPhoto.id} client={client} senior={editingPhoto} onClose={() => setEditingPhotoId(null)} onSaved={async action => {
+      await onChanged();
+      setMessage(action === 'remove' ? 'Senior photo removed.' : 'Senior photo saved.');
+    }}/>}
   </section>;
 }

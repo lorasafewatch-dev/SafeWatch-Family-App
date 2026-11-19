@@ -26,6 +26,9 @@ import RecoveryLinkConfirm from '../../shared/components/RecoveryLinkConfirm.jsx
 import AccountAccessDenied from '../../shared/components/AccountAccessDenied.jsx';
 import LogoutConfirmation from '../../shared/components/LogoutConfirmation.jsx';
 import { Loader2 } from 'lucide-react';
+import { SeniorPhotoContext } from '../../shared/seniorPhotoContext.js';
+import useFamilyRequestNotifications from '../../shared/components/useFamilyRequestNotifications.js';
+import IncidentDetails from '../../shared/components/IncidentDetails.jsx';
 
 const EMPTY_TELEMETRY = { heart_rate: null, spo2: null, battery_percent: null,
   is_sos: false, location: null, created_at: null };
@@ -47,6 +50,8 @@ function App({ client } = {}) {
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [notificationsError, setNotificationsError] = useState('');
   const [popupKey, setPopupKey] = useState(null);
+  const [notificationDetails, setNotificationDetails] = useState(null);
+  const accessNotifications = useFamilyRequestNotifications(supabase, isLoggedIn ? userId : null, 'family');
   const [confirmingKey, setConfirmingKey] = useState(null);
   const [alertError, setAlertError] = useState('');
   const [soundsBlocked, setSoundsBlocked] = useState(false);
@@ -84,6 +89,7 @@ function App({ client } = {}) {
 
   useEffect(() => {
     setLogoutRequested(false);
+    setNotificationDetails(null);
     alertMemory.current = { incidents: [], ledger: {} };
     lastGpsByDevice.current = new Map();
     telemetryRequest.current += 1;
@@ -475,7 +481,7 @@ function App({ client } = {}) {
     }
   };
 
-  const handleDismissAll = async () => {
+  const handleDismissAll = async deviceId => {
     if (!familyAlerts.length || confirmationBusy.current) return;
     confirmationBusy.current = true;
     setConfirmingKey('all');
@@ -488,7 +494,7 @@ function App({ client } = {}) {
     setSoundsBlocked(false);
     stopAlertSounds();
     try {
-      for (const incident of familyAlerts) {
+      for (const incident of familyAlerts.filter(row => !deviceId || row.device_id === deviceId)) {
         if (incident.alert_type === 'SOS') {
           const updated = await respondToSos(supabase, incident, 'confirmed', 'family');
           setSosResponses(current => mergeSosResponse(current, updated));
@@ -588,17 +594,17 @@ function App({ client } = {}) {
       case 'location':
         return <LocationView key={senior.deviceId || 'waiting'} client={supabase} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} now={now} onSafeZoneSaved={handleSafeZoneSaved} onReloadSafeZone={() => fetchLinkedSeniors(undefined, true)} />;
       case 'health':
-        return <HealthView senior={senior} telemetry={telemetry} now={now} />;
+        return <HealthView key={userId} client={supabase} senior={senior} telemetry={telemetry} now={now} />;
       case 'alerts':
-        return <AlertsView senior={senior} familyAlerts={familyAlerts} now={now} confirmingKey={confirmingKey} error={alertError} handleAcknowledge={handleAcknowledgeAlert} handleDecline={incident => handleSosResponse(incident, 'declined')} handleDismissAll={handleDismissAll} sosResponses={sosResponses} sosResponsesError={sosResponsesError} onRetryResponses={fetchSosResponseUpdates} onOpenHistory={() => setView('history')} />;
-      case 'history':
-        return <div className="nature-secondary"><button type="button" className="watch-activity__more" onClick={() => setView('alerts')}>Back to alerts</button><ActivityHistory key={userId} client={supabase} seniors={linkedSeniors} initialCategory="alerts"/></div>;
+        return <AlertsView key={`${userId}:${selectedDeviceId}`} client={supabase} seniors={linkedSeniors} senior={senior} familyAlerts={familyAlerts.filter(row => row.device_id === selectedDeviceId)} now={now} confirmingKey={confirmingKey} error={alertError} handleAcknowledge={handleAcknowledgeAlert} handleDecline={incident => handleSosResponse(incident, 'declined')} handleDismissAll={() => handleDismissAll(selectedDeviceId)} sosResponses={sosResponses.filter(row => row.device_id === selectedDeviceId)} sosResponsesError={sosResponsesError} onRetryResponses={fetchSosResponseUpdates} onOpenHistory={() => setView('history')} />;
       case 'profile':
         return <div className="nature-account"><ProfileView client={supabase} handleLogout={handleLogout}>
           <FamilySeniors client={supabase} seniors={linkedSeniors} selectedDeviceId={selectedDeviceId}
             loading={seniorListLoading} loadError={seniorListError} onReload={() => fetchLinkedSeniors(undefined, true)}
             onSelect={id => selectSenior(id)} onRemoved={removeLinkedSenior} onChanged={id => fetchLinkedSeniors(id, true)} />
         </ProfileView></div>;
+      case 'history':
+        return <div className="nature-secondary"><button type="button" className="watch-activity__more" onClick={() => setView('alerts')}>Back to alerts</button><ActivityHistory key={userId} client={supabase} seniors={linkedSeniors} initialCategory="alerts"/></div>;
       default:
         return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} />;
     }
@@ -609,7 +615,7 @@ function App({ client } = {}) {
   const clock = alertClock(activeAlert, now);
 
   return (
-    <div className="family-nature">
+    <SeniorPhotoContext.Provider value={{ client: supabase, seniors: linkedSeniors }}><div className="family-nature">
       <div className="nature-background" aria-hidden="true"/>
       {activeAlert && !popupAlert && (
         <div className="relative z-[2001] bg-orange-50 border-b border-orange-200 px-5 py-4">
@@ -622,7 +628,7 @@ function App({ client } = {}) {
         </div>
       )}
       <main className="nature-content" ref={contentRef}>
-        <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length} notifications={{ app: 'family', userId, alerts: familyAlerts, responses: sosResponses, loading: notificationsLoading, blocked: !!popupAlert, error: [notificationsError, sosResponsesError].filter(Boolean).join(' '), onRefresh: fetchFamilyAlerts, onOpenNotification: item => { setView('alerts'); if (item.active) setPopupKey(item.incident.key); } }}/>
+        <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length} notifications={{ app: 'family', userId, alerts: familyAlerts, responses: sosResponses, requests: accessNotifications.requests, loading: notificationsLoading, blocked: !!popupAlert, error: [notificationsError, sosResponsesError, accessNotifications.error].filter(Boolean).join(' '), onRefresh: () => { fetchFamilyAlerts(); accessNotifications.refresh(); }, onOpenNotification: item => { if (item.category === 'access') { setView('seniors'); return; } setView('alerts'); if (item.active) setPopupKey(item.incident.key); else setNotificationDetails(item.incident); } }}/>
         {!['profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-manage-watches"><button type="button" onClick={() => setView('seniors')}>Manage watches</button></div>}
         {view !== 'profile' && seniorListError && <p role="alert" className="nature-notice">{seniorListError}</p>}
         {!['dashboard', 'location', 'profile', 'seniors', 'history'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} compact/></div>}
@@ -633,7 +639,8 @@ function App({ client } = {}) {
       <AlertWarning incident={popupAlert} now={now} onConfirm={handleAcknowledgeAlert} onDecline={incident => handleSosResponse(incident, 'declined')}
         onMinimize={() => setPopupKey(null)} busy={!!confirmingKey} error={alertError}
         soundsBlocked={soundsBlocked} onEnableSounds={unlockSounds}/>
-    </div>
+      {notificationDetails && linkedSeniors.some(senior => senior.id === notificationDetails.device_id) && <IncidentDetails incident={notificationDetails} onClose={() => setNotificationDetails(null)}/>}
+    </div></SeniorPhotoContext.Provider>
   );
 }
 

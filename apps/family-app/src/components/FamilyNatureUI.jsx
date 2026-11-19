@@ -1,5 +1,7 @@
 import { useId } from 'react';
-import { Bell, ChevronDown, Clock, Droplet, Heart, Home, MapPin, ShieldCheck, User } from 'lucide-react';
+import { Bell, Clock, Droplet, Heart, Home, MapPin, ShieldCheck, User } from 'lucide-react';
+import SeniorPicker from '../../../shared/components/SeniorPicker.jsx';
+import SeniorPhoto from '../../../shared/components/SeniorPhoto.jsx';
 import { isLiveFamilyLocation, locationAge } from '../../../shared/gpsLocation.js';
 import { isValidGpsPoint } from '../../../shared/gpsStatus.js';
 import { familyZoneContains } from '../../../shared/familySafeZone.js';
@@ -28,13 +30,10 @@ export function FamilyBrand({ onAlerts, alertCount = 0, notifications }) {
 }
 
 export function SeniorSelector({ senior, seniors = [], selectedId, onSelect, disabled = false, compact = false, children }) {
-  const id = useId();
-  const options = seniors.length ? seniors : [{ id: senior.deviceId || 'current', patient_name: senior.name }];
   return <section className={`nature-senior nature-glass${compact ? ' nature-senior--compact' : ''}`} aria-label="Selected senior">
-    <img className="nature-senior__avatar" src={seniorAvatar} alt=""/>
+    <SeniorPhoto senior={senior} className="nature-senior__avatar" fallback={seniorAvatar}/>
     <div className="nature-senior__details">
-      <label htmlFor={id} className="sr-only">Senior to monitor</label>
-      <div className="nature-senior__select-wrap"><select id={id} value={selectedId || options[0]?.id || ''} disabled={disabled || !onSelect} onChange={event => onSelect?.(event.target.value)}>{options.map(device => <option key={device.id} value={device.id}>{device.patient_name}</option>)}</select><ChevronDown aria-hidden="true"/></div>
+      <SeniorPicker seniors={seniors} value={selectedId || senior.deviceId || ''} disabled={disabled} onChange={onSelect}/>
       {!compact && <p className="nature-senior__meta">{senior.age && senior.age !== '--' ? `${senior.age} years · ` : ''}{senior.gender || 'Family member'}</p>}
       {children}
     </div>
@@ -51,7 +50,7 @@ export function Freshness({ children }) {
 
 export function ReadingCard({ type, value }) {
   const oxygen = type === 'oxygen';
-  const available = Number.isFinite(value) && value > 0;
+  const available = Number.isFinite(value) && value > 0 && value <= (oxygen ? 100 : 300);
   const normal = available && (oxygen ? value >= 95 : value >= 60 && value <= 100);
   const gradient = useId();
   const Icon = oxygen ? Droplet : Heart;
@@ -64,7 +63,7 @@ export function ReadingCard({ type, value }) {
 
 export function FamilyNavigation({ view, setView }) {
   const tabs = [['dashboard', 'Home', Home], ['location', 'Location', MapPin], ['health', 'Health', Heart], ['alerts', 'Alerts', Bell], ['profile', 'Profile', User]];
-  return <nav className="nature-nav" aria-label="Family app navigation">{tabs.map(([key, label, Icon]) => <button key={key} type="button" onClick={() => setView(key)} className={`nature-nav__item${key === 'health' ? ' nature-nav__item--health' : ''}${view === key || view === 'seniors' && key === 'profile' || view === 'history' && key === 'alerts' ? ' is-active' : ''}`} aria-current={view === key || view === 'seniors' && key === 'profile' || view === 'history' && key === 'alerts' ? 'page' : undefined}><span className="nature-nav__icon"><Icon aria-hidden="true"/></span><span>{label}</span></button>)}</nav>;
+  return <nav className="nature-nav" aria-label="Family app navigation">{tabs.map(([key, label, Icon]) => <button key={key} type="button" onClick={() => setView(key)} className={`nature-nav__item${key === 'health' ? ' nature-nav__item--health' : ''}${view === key || view === 'seniors' && key === 'profile' ? ' is-active' : ''}`} aria-current={view === key || view === 'seniors' && key === 'profile' ? 'page' : undefined}><span className="nature-nav__icon"><Icon aria-hidden="true"/></span><span>{label}</span></button>)}</nav>;
 }
 
 export function FamilyPageTitle({ title, children }) {

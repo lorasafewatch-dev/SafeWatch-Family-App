@@ -37,7 +37,7 @@ export async function loadFamilySeniors(client, userId) {
 
 export async function loadFamilyRequests(client) {
   const { data, error } = await client.from('safewatch_family_requests')
-    .select('id, device_id, kind, requested_name, status, created_at').order('created_at', { ascending: false }).limit(100);
+    .select('id, device_id, kind, requested_name, status, created_at, reviewed_at').order('created_at', { ascending: false }).limit(100);
   if (error) throw error;
   return data || [];
 }

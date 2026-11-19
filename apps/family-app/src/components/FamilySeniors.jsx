@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Plus, Trash2, Users } from 'lucide-react';
-import { cancelFamilyRequest, linkFamilySenior, loadFamilyRequests, registerFamilySenior, seniorManagementError, unlinkFamilySenior } from '../../../shared/familySeniors.js';
+import { cancelFamilyRequest, linkFamilySenior, loadFamilyRequests, normalizeWatchId, registerFamilySenior, seniorManagementError, unlinkFamilySenior } from '../../../shared/familySeniors.js';
+import SeniorPhoto from '../../../shared/components/SeniorPhoto.jsx';
 
 const emptyRegistration = { name: '', watchId: '', age: '', gender: 'Not specified' };
 const inputClass = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 focus:outline-2 focus:outline-emerald-500 disabled:opacity-60';
@@ -37,13 +38,15 @@ export default function FamilySeniors({ client, seniors, selectedDeviceId, loadi
     busyRef.current = true;
     setBusy(true); setError(''); setMessage('');
     try {
+      const id = normalizeWatchId(mode === 'existing' ? watchId : draft.watchId);
+      if (seniors.some(senior => senior.id === id)) throw new Error('This watch is already linked to your account.');
       if (mode === 'existing') await linkFamilySenior(client, watchId);
       else await registerFamilySenior(client, draft);
-      await onChanged();
       if (!mounted.current) return;
       setExpanded(false); setDraft(emptyRegistration); setWatchId('');
       setRequestRevision(value => value + 1);
-      setMessage('Request sent to barangay staff. The senior will appear here after access is approved.');
+      setMessage('Request submitted. Waiting for barangay approval.');
+      onChanged();
     } catch (error) { if (mounted.current) setError(seniorManagementError(error)); }
     finally { busyRef.current = false; if (mounted.current) setBusy(false); }
   };
@@ -95,7 +98,7 @@ export default function FamilySeniors({ client, seniors, selectedDeviceId, loadi
     {seniors.map(senior => <article key={senior.id} className="bg-white rounded-3xl border border-slate-100 p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h4 className="font-bold text-slate-800 break-words">{senior.patient_name}</h4>
+          <div className="senior-feature-person"><SeniorPhoto senior={senior}/><h4 className="font-bold text-slate-800 break-words">{senior.patient_name}</h4></div>
           <p className="text-sm text-slate-500 mt-1">{senior.age == null ? 'Age not provided' : `Age ${senior.age}`} · {senior.gender}</p>
           <p className="text-[11px] text-slate-400 break-all mt-2">Watch ID: {senior.id}</p>
         </div>

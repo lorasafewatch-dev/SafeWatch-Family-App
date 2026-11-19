@@ -4,8 +4,13 @@ import { formatDuration } from './AlertWarning.jsx';
 import { FamilyPageTitle } from './FamilyNatureUI.jsx';
 import SosResponseUpdates, { SosResponseIndicator } from '../../../shared/components/SosResponseStatus.jsx';
 import { sosResponseState } from '../../../shared/sosResponse.js';
+import { useState } from 'react';
+import IncidentDetails from '../../../shared/components/IncidentDetails.jsx';
+import ActivityHistory from '../../../shared/components/ActivityHistory.jsx';
+import SeniorPhoto from '../../../shared/components/SeniorPhoto.jsx';
 
-export default function FamilyAlerts({ senior, familyAlerts, now, confirmingKey, error, handleAcknowledge, handleDecline, handleDismissAll, sosResponses, sosResponsesError, onRetryResponses, onOpenHistory }) {
+export default function FamilyAlerts({ client, seniors = [], senior, familyAlerts, now, confirmingKey, error, handleAcknowledge, handleDecline, handleDismissAll, sosResponses, sosResponsesError, onRetryResponses, onOpenHistory }) {
+  const [details, setDetails] = useState(null);
   return <div className="nature-secondary nature-alerts">
     <FamilyPageTitle title="Alerts">Health, location, and safety updates.</FamilyPageTitle>
     {onOpenHistory && <button type="button" className="watch-activity__more" onClick={onOpenHistory}>Activity log &amp; alert history</button>}
@@ -19,16 +24,19 @@ export default function FamilyAlerts({ senior, familyAlerts, now, confirmingKey,
       const response = sosResponseState(alert);
       return <article key={alert.key} className={`nature-glass nature-alert${sos ? ' nature-alert--sos' : ''}`}>
         <span className="nature-alert__icon"><Icon aria-hidden="true"/></span>
-        <div className="nature-alert__body"><p className="nature-alert__name">{alert.devices?.patient_name || senior.name}</p>
+        <div className="nature-alert__body"><div className="senior-feature-person"><SeniorPhoto deviceId={alert.device_id}/><p className="nature-alert__name">{alert.devices?.patient_name || senior.name}</p></div>
           <h3>{alertTitle(alert)}</h3><p>{battery ? batteryAlertMessage(alert) : `Unconfirmed for ${formatDuration(clock.elapsedSeconds)}`}</p>
           <strong className="nature-alert__timer">{sos && response.assigned ? response.message : battery ? 'Charge the watch soon' : clock.escalated ? 'Barangay attention required' : `${formatDuration(clock.remainingSeconds)} remaining`}</strong>
           <SosResponseIndicator incident={alert}/>
+          <button type="button" onClick={() => setDetails(alert)}>View details</button>
           <p className="nature-alert__date">Latest update: {new Date(alert.details.last_seen_at).toLocaleTimeString()}</p>
           <button type="button" data-confirm-alert disabled={!!confirmingKey} onClick={() => handleAcknowledge(alert)}>{confirmingKey === alert.key ? 'Saving response…' : sos ? 'Confirm response' : 'Confirm I have checked'}</button>
           {sos && handleDecline && <><p>Cannot reach the senior? Notify the barangay secretary or admin immediately.</p><button type="button" className="sos-decline-button" data-confirm-alert disabled={!!confirmingKey || response.responses.family?.decision === 'declined'} onClick={() => handleDecline(alert)}>{response.responses.family?.decision === 'declined' ? 'Barangay already notified' : 'Can’t respond — notify barangay'}</button></>}
           <time dateTime={alert.created_at}>{new Date(alert.created_at).toLocaleString()}</time>
         </div></article>;
     })}
-    <SosResponseUpdates responses={sosResponses} error={sosResponsesError} onRetry={onRetryResponses}/>
+    <SosResponseUpdates responses={sosResponses} error={sosResponsesError} onRetry={onRetryResponses} onDetails={setDetails}/>
+    {client && !onOpenHistory && <ActivityHistory client={client} seniors={seniors} selectedId={senior.deviceId} onDetails={setDetails}/>}
+    {details && <IncidentDetails incident={details} onClose={() => setDetails(null)}/>}
   </div>;
 }

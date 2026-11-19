@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { disableFamilyPush, enableFamilyPush, PUSH_OWNER_KEY, pushError, pushRegistration, pushSupported, savePushSubscription } from '../familyPush.js';
+import { disableFamilyPush, enableFamilyPush, PUSH_OWNER_KEY, pushAvailability, pushError, pushRegistration, savePushSubscription } from '../familyPush.js';
 
 export default function useFamilyPush(client, userId) {
-  const [status, setStatus] = useState(pushSupported() ? 'checking' : 'unsupported');
+  const [status, setStatus] = useState(pushAvailability);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const subscriptionId = useRef(null);
   const currentUser = useRef(userId);
+  const operation = useRef(null);
 
   useEffect(() => {
     let active = true;
     currentUser.current = userId;
     subscriptionId.current = null;
-    if (!pushSupported()) return;
+    const availability = pushAvailability();
+    if (availability !== 'checking') return;
     // Initial session restoration is not a sign-out.
     if (userId === undefined) return;
     queueMicrotask(() => {
@@ -31,11 +33,14 @@ export default function useFamilyPush(client, userId) {
       }).catch(() => {});
       return;
     }
+    let checking = false;
     const check = async () => {
+      if (checking || operation.current) return;
       if (Notification.permission !== 'granted' || localStorage.getItem(PUSH_OWNER_KEY) !== userId) {
         if (active) setStatus(Notification.permission === 'denied' ? 'blocked' : 'off');
         return;
       }
+      checking = true;
       try {
         const registration = await pushRegistration();
         const subscription = await registration.pushManager.getSubscription();
@@ -44,6 +49,7 @@ export default function useFamilyPush(client, userId) {
         const id = await savePushSubscription(client, userId, registration, subscription);
         if (active) { subscriptionId.current = id; setStatus('enabled'); setError(''); }
       } catch (err) { if (active) { setError(pushError(err)); setStatus('off'); } }
+      finally { checking = false; }
     };
     check();
     const focus = () => { if (!document.hidden) check(); };
@@ -53,12 +59,19 @@ export default function useFamilyPush(client, userId) {
   }, [client, userId]);
 
   const perform = async action => {
-    if (busy || !userId) return;
+    if (operation.current || !userId) return;
     const owner = userId;
+    operation.current = owner;
     setBusy(true); setError(''); setNotice('');
     try { await action(owner); }
-    catch (err) { if (currentUser.current === owner) setError(pushError(err)); }
-    finally { if (currentUser.current === owner) setBusy(false); }
+    catch (err) {
+      if (currentUser.current !== owner) return;
+      if (Notification.permission === 'denied') setStatus('blocked');
+      setError(pushError(err));
+    } finally {
+      operation.current = null;
+      if (currentUser.current === owner) setBusy(false);
+    }
   };
   return { status, error, notice, busy,
     enable: () => perform(async owner => {

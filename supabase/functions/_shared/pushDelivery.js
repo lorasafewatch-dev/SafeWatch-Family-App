@@ -1,3 +1,6 @@
+// Match the same provider origins and opaque endpoint paths as the registration RPC.
+const pushEndpoint = /^https:\/\/(?:fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|(?:[a-z0-9-]+\.)+push\.apple\.com|(?:[a-z0-9-]+\.)+notify\.windows\.com)\/[A-Za-z0-9_./=:%?&+~-]+$/;
+
 export function createPushHandler({ rpc, createRequest, fetchPush = fetch, now = Date.now }) {
   return async request => {
     if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
@@ -11,13 +14,15 @@ export function createPushHandler({ rpc, createRequest, fetchPush = fetch, now =
       let result = 'retry';
       let status = null;
       try {
-        if (!await rpc('family_push_delivery_current', { p_id: delivery.id, p_lease: delivery.lease })) result = 'cancelled';
-        else {
-          const ttl = Math.max(1, Math.min(300, Math.floor((Date.parse(delivery.payload.expiresAt) - now()) / 1000)));
+        const ttl = Math.floor((Date.parse(delivery.payload.expiresAt) - now()) / 1000);
+        if (!Number.isFinite(ttl) || ttl <= 0 || !await rpc('family_push_delivery_current', { p_id: delivery.id, p_lease: delivery.lease })) {
+          result = 'cancelled';
+        } else if (!pushEndpoint.test(delivery.subscription.endpoint)) {
+          result = 'failed';
+        } else {
           const details = createRequest(delivery.subscription, JSON.stringify(delivery.payload), {
-            vapidDetails: batch.vapid, TTL: ttl, urgency: 'high', topic: delivery.id.replaceAll('-', ''),
+            vapidDetails: batch.vapid, TTL: Math.min(300, ttl), urgency: 'high', topic: delivery.id.replaceAll('-', ''),
           });
-          if (!/^https:\/\/(?:fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|web\.push\.apple\.com)\//.test(details.endpoint)) throw new Error('Invalid endpoint');
           const response = await fetchPush(details.endpoint, { method: 'POST', headers: details.headers,
             body: details.body, redirect: 'error', signal: AbortSignal.timeout(8000) });
           status = response.status;

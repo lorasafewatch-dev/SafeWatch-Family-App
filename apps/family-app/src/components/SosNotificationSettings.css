@@ -14,3 +14,9 @@
 .sos-notification-settings__actions button:focus-visible{outline:3px solid #5cc5a6;outline-offset:3px}
 .sos-notification-settings__actions svg{width:18px;height:18px}
 .sos-notification-settings__error{color:#b32636}
+.sos-notification-settings__steps{margin:.65rem 0;padding-left:1.15rem;list-style:decimal;font-size:.85rem;line-height:1.55}
+.sos-notification-settings__steps li+li{margin-top:.45rem}
+.sos-notification-setup{position:fixed;inset:0;margin:auto;width:min(440px,calc(100% - 2rem));max-height:calc(100dvh - 2rem);padding:0;border:1px solid #cde5d8;border-radius:24px;background:#f8fffa;box-shadow:0 20px 80px #112e2750;color:#294f45}
+.sos-notification-setup::backdrop{background:#122d285c}
+.sos-notification-setup .sos-notification-settings{margin:0;border:0;border-radius:0;box-shadow:none;background:transparent}
+.sos-notification-setup__hint{font-size:.8rem;margin:0 1.3rem 1.3rem;color:#47675c}

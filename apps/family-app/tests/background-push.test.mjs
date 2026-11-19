@@ -70,6 +70,21 @@ await handler(request()); assert.equal(receipts.at(-1).p_result, 'sent'); assert
 status = 503; await handler(request()); assert.equal(receipts.at(-1).p_result, 'retry');
 status = 410; await handler(request()); assert.equal(receipts.at(-1).p_result, 'expired');
 status = 400; await handler(request()); assert.equal(receipts.at(-1).p_result, 'failed');
+status = 201;
+for (const endpoint of [
+  'https://push-region.push.apple.com/token',
+  'https://updates.push.services.mozilla.com/wpush/v2/token',
+  'https://wns2-am3p.notify.windows.com/w/?token=encoded%3d%2b%2f',
+]) {
+  delivery.subscription.endpoint = endpoint;
+  await handler(request());
+  assert.equal(receipts.at(-1).p_result, 'sent');
+}
+delivery.subscription.endpoint = 'https://wns2-am3p.notify.windows.com.evil.test/w/?token=fake';
+const beforeInvalid = sends.length;
+await handler(request());
+assert.equal(receipts.at(-1).p_result, 'failed');
+assert.equal(sends.length, beforeInvalid);
 allowed = false; const before = sends.length;
 await handler(request()); assert.equal(receipts.at(-1).p_result, 'cancelled'); assert.equal(sends.length, before);
 console.log('PASS authenticated sender, urgent bounded delivery, transient retries, expired endpoints and revocation recheck');

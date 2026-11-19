@@ -30,7 +30,7 @@ import { SeniorPhotoContext } from '../../shared/seniorPhotoContext.js';
 import useFamilyRequestNotifications from '../../shared/components/useFamilyRequestNotifications.js';
 import IncidentDetails from '../../shared/components/IncidentDetails.jsx';
 import useFamilyPush from './components/useFamilyPush.js';
-import SosNotificationSettings from './components/SosNotificationSettings.jsx';
+import SosNotificationSettings, { SosNotificationSetup } from './components/SosNotificationSettings.jsx';
 import { sosIdFromUrl } from './familyPush.js';
 
 const EMPTY_TELEMETRY = { heart_rate: null, spo2: null, battery_percent: null,
@@ -695,6 +695,8 @@ function App({ client } = {}) {
         {renderView()}
       </main>
       <FamilyNavigation view={view} setView={setView}/>
+      <SosNotificationSetup key={userId} userId={userId} push={push}
+        paused={seniorListLoading || !!(popupAlert || activeAlert?.alert_type === 'SOS' || pushTargetId || notificationDetails || logoutRequested)}/>
       {logoutRequested && <LogoutConfirmation client={supabase} app="family" onCancel={() => setLogoutRequested(false)} onLoggedOut={() => { setLogoutRequested(false); setView('dashboard'); }}/>}
       <AlertWarning incident={popupAlert} now={now} onConfirm={handleAcknowledgeAlert} onDecline={incident => handleSosResponse(incident, 'declined')}
         onMinimize={() => { closePushTarget(); setPopupKey(null); }} busy={!!confirmingKey} error={alertError}

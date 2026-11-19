@@ -7,7 +7,23 @@ export function sosIdFromUrl(url) {
 
 export function pushSupported() {
   return !!(globalThis.isSecureContext && globalThis.navigator?.serviceWorker
-    && globalThis.PushManager && globalThis.Notification);
+    && globalThis.PushManager && typeof globalThis.Notification?.requestPermission === 'function');
+}
+
+export function pushAvailability() {
+  const { userAgent = '', platform, maxTouchPoints, standalone } = globalThis.navigator || {};
+  const appleMobile = /iPhone|iPad|iPod/i.test(userAgent) || (platform === 'MacIntel' && maxTouchPoints > 1);
+  if (appleMobile && !standalone && !globalThis.matchMedia?.('(display-mode: standalone)').matches) return 'install';
+  return pushSupported() ? 'checking' : 'unsupported';
+}
+
+export function notificationSetupKey(userId) {
+  return `safewatch.family.push-setup.v1:${userId}`;
+}
+
+export function rememberNotificationSetup(userId) {
+  try { localStorage.setItem(notificationSetupKey(userId), 'done'); }
+  catch { /* An unavailable preference store should not block notifications. */ }
 }
 
 export function applicationServerKey(value) {
@@ -29,7 +45,12 @@ async function setOwner(registration, userId) {
   await new Promise((resolve, reject) => {
     const channel = new MessageChannel();
     const timer = setTimeout(() => { channel.port1.close(); reject(new Error('Reopen SafeWatch to finish its notification update.')); }, 5000);
-    channel.port1.onmessage = () => { clearTimeout(timer); channel.port1.close(); resolve(); };
+    channel.port1.onmessage = event => {
+      if (!event.data?.saved) return;
+      clearTimeout(timer);
+      channel.port1.close();
+      resolve();
+    };
     worker.postMessage({ type: 'SAFEWATCH_PUSH_OWNER', userId }, [channel.port2]);
   });
 }
@@ -41,13 +62,19 @@ export async function savePushSubscription(client, userId, registration, subscri
   if (error) throw error;
   await setOwner(registration, userId);
   localStorage.setItem(PUSH_OWNER_KEY, userId);
+  rememberNotificationSetup(userId);
   return data;
 }
 
 export async function enableFamilyPush(client, userId) {
   // Ask while the button's user activation is still available.
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('Allow notifications in your phone’s SafeWatch notification settings, then retry.');
+  const permission = Notification.permission === 'default'
+    ? await Notification.requestPermission() : Notification.permission;
+  if (permission !== 'granted') {
+    throw new Error(permission === 'denied'
+      ? 'Allow SafeWatch notifications in your browser or device settings, then try again.'
+      : 'Notification permission is still pending. Tap Enable SOS notifications when you’re ready.');
+  }
   const registration = await pushRegistration();
   const { data, error } = await client.rpc('family_push_configuration');
   if (error) throw error;
@@ -72,6 +99,7 @@ export async function disableFamilyPush(client, userId) {
   await setOwner(registration, null);
   if (subscription) await subscription.unsubscribe();
   if (localStorage.getItem(PUSH_OWNER_KEY) === userId) localStorage.removeItem(PUSH_OWNER_KEY);
+  rememberNotificationSetup(userId);
 }
 
 export function pushError(error) {

@@ -18,7 +18,12 @@ await context.addInitScript(() => {
     pushManager: { getSubscription: async () => subscription, subscribe: async () => { subscription = fake; return fake; } } };
   Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { ready: Promise.resolve(registration), getRegistration: async () => registration } });
   Object.defineProperty(globalThis, 'PushManager', { configurable: true, value: class {} });
-  Object.defineProperty(globalThis, 'Notification', { configurable: true, value: { permission: 'default', requestPermission: async () => { globalThis.Notification.permission = 'granted'; return 'granted'; } } });
+  globalThis.permissionRequests = 0;
+  Object.defineProperty(globalThis, 'Notification', { configurable: true, value: { permission: 'default', requestPermission: async () => {
+    globalThis.permissionRequests += 1;
+    globalThis.Notification.permission = globalThis.rejectPermission ? 'denied' : 'granted';
+    return globalThis.Notification.permission;
+  } } });
 });
 const page = await context.newPage(), errors = [];
 page.on('pageerror', error => errors.push(error.message));
@@ -28,12 +33,17 @@ const base = `http://127.0.0.1:${server.httpServer.address().port}/tests/monitor
 try {
   await page.goto(base);
   const settings = page.getByRole('region', { name: 'SOS background notifications' });
-  await settings.getByRole('button', { name: 'Enable SOS notifications', exact: true }).waitFor();
+  const setup = page.getByRole('dialog', { name: 'Set up SOS notifications' });
+  const setupEnable = setup.getByRole('button', { name: 'Enable SOS notifications', exact: true });
+  await setupEnable.waitFor();
+  assert.equal(await page.evaluate(() => globalThis.permissionRequests), 0);
   await page.evaluate(() => { globalThis.monitoringFixture.failPush = true; });
-  await settings.getByRole('button', { name: 'Enable SOS notifications', exact: true }).tap();
-  await settings.getByRole('alert').waitFor();
+  await setupEnable.tap();
+  await setup.getByRole('alert').waitFor();
   await page.evaluate(() => { globalThis.monitoringFixture.failPush = false; });
-  await settings.getByRole('button', { name: 'Enable SOS notifications', exact: true }).tap();
+  await setupEnable.tap();
+  await setup.waitFor({ state: 'hidden' });
+  assert.equal(await page.evaluate(() => globalThis.permissionRequests), 1);
   await settings.waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Profile', exact: true }).tap();
   await settings.getByText('Enabled on this device', { exact: true }).waitFor();
@@ -44,6 +54,7 @@ try {
   await page.screenshot({ path: path.join(output, 'phone-notification-settings.png'), fullPage: true });
   await settings.getByRole('button', { name: 'Turn off on this device', exact: true }).tap();
   await settings.getByRole('button', { name: 'Enable SOS notifications', exact: true }).waitFor();
+  assert.equal(await setup.count(), 0);
   // A cold notification click can target completed history outside the active list.
   await page.goto(base + '?sos=1');
   await page.getByRole('dialog', { name: 'Alert details', exact: true }).waitFor();
@@ -58,6 +69,28 @@ try {
   await page.screenshot({ path: path.join(output, 'notification-opens-active-sos.png'), fullPage: true });
   await page.goto(base + '?sos=999');
   await page.getByRole('alert').filter({ hasText: 'This SOS is unavailable or is no longer linked to your family.' }).waitFor();
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(base + '?sos=2&push_fixture=active');
+  await popup.getByRole('button', {name: 'I can respond', exact: true}).waitFor();
+  assert.equal(await setup.count(), 0, 'the setup dialog does not cover an SOS');
+  await page.goto(base);
+  await setupEnable.waitFor();
+  await page.evaluate(() => { globalThis.rejectPermission = true; });
+  await setupEnable.tap();
+  await setup.getByText(/Notifications are blocked/).waitFor();
+  assert.equal(await setupEnable.count(), 0);
+  await setup.getByRole('button', { name: 'Set up later' }).tap();
+  await page.reload();
+  await page.getByRole('button', { name: 'Profile', exact: true }).tap();
+  await settings.getByRole('button', { name: 'Enable SOS notifications', exact: true }).waitFor();
+  assert.equal(await setup.count(), 0, 'deferring is remembered across sessions');
+  const apple = await browser.newContext({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', viewport: { width: 390, height: 844 } });
+  const iphone = await apple.newPage();
+  await iphone.goto(base);
+  const appleSetup = iphone.getByRole('dialog', {name: 'Set up SOS notifications'});
+  await appleSetup.getByText('Add to Home Screen', {exact: true}).waitFor();
+  assert.equal(await appleSetup.getByRole('button', {name: 'Enable SOS notifications'}).count(), 0);
+  await apple.close();
   assert.equal(errors.length, 0, errors.join('\n'));
   await writeFile(path.join(output, 'report.json'), JSON.stringify({ passed: true, checks: ['enable failure/retry', 'persistent subscription', 'test notification', 'disable', 'cold deep link to acknowledged SOS', 'cold deep link to active SOS with response actions', 'unavailable SOS', 'no automatic acknowledgment'], browserErrors: errors }, null, 2));
   console.log('PASS notification controls, save failure/retry, targeted SOS navigation, preserved history and unavailable access');

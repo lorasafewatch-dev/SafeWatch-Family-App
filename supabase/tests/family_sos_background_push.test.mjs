@@ -89,4 +89,20 @@ try {
   await q('delete from auth.sessions where user_id=$1', [family]);
   assert.equal((await claim()).deliveries.length, 0);
   console.log('PASS isolated delayed/rate-limited test notifications, expired subscription cleanup and sign-out cancellation');
+  const compatibility = await readFile(new URL('../migrations/20261119165938_family_push_browser_compatibility.sql', import.meta.url), 'utf8');
+  await pg.exec(compatibility);
+  await pg.exec(compatibility);
+  await save(outsider, 'https://web.push.apple.com/QSomeToken');
+  await save(outsider, 'https://push-region.push.apple.com/QOtherToken');
+  await save(outsider, 'https://wns2-am3p.notify.windows.com/w/?token=encoded%3d%2b%2f');
+  await save(outsider, 'https://updates.push.services.mozilla.com/wpush/v2/SomeFirefoxToken');
+  for (let i = 0; i < 7; i++) await save(outsider, 'https://fcm.googleapis.com/wp/extra-' + i);
+  await assert.rejects(save(outsider, 'https://wns2-am3p.notify.windows.com.evil.test/w/?token=fake'), /Invalid push subscription/);
+  await assert.rejects(save(outsider, 'https://wns2-am3p.notify.windows.com@evil.test/w/?token=fake'), /Invalid push subscription/);
+  await assert.rejects(save(outsider, 'https://web.push.apple.com:8443/w/fake'), /Invalid push subscription/);
+  const multiple = await insert(otherWatch);
+  batch = await claim();
+  assert.equal(batch.deliveries.length, 12);
+  assert.ok(batch.deliveries.every(item => item.payload.alertId === String(multiple) && item.payload.userId === outsider));
+  console.log('PASS cross-provider endpoints, one delivery per authorized subscription, and more than ten devices');
 } finally { await pg.close(); }

@@ -3,6 +3,8 @@ import { Loader2, LogOut, ShieldCheck } from 'lucide-react';
 import './LogoutConfirmation.css';
 
 export default function LogoutConfirmation({ client, app, scope, onCancel, onLoggedOut = onCancel }) {
+  const signOutScope = scope ?? (app === 'family' ? 'local' : undefined);
+  const localSignOut = signOutScope === 'local';
   const dialog = useRef(null);
   const cancelButton = useRef(null);
   const locked = useRef(false);
@@ -28,7 +30,7 @@ export default function LogoutConfirmation({ client, app, scope, onCancel, onLog
     if (locked.current) return;
     locked.current = true; setBusy(true); setError('');
     try {
-      const { error: failure } = await client.auth.signOut(scope ? { scope } : undefined);
+      const { error: failure } = await client.auth.signOut(signOutScope ? { scope: signOutScope } : undefined);
       if (failure) throw failure;
       if (mounted.current) onLoggedOut();
     } catch {
@@ -43,8 +45,8 @@ export default function LogoutConfirmation({ client, app, scope, onCancel, onLog
     onCancel={event => { event.preventDefault(); if (!locked.current) onCancel(); }}>
     <div className="sw-logout-confirm__brand"><ShieldCheck aria-hidden="true"/><span>SafeWatch{app ? ` · ${app === 'dashboard' ? 'Barangay portal' : 'Family'}` : ''}</span></div>
     <div className="sw-logout-confirm__icon"><LogOut aria-hidden="true"/></div>
-    <h2 id={`${id}-title`}>Log out of SafeWatch?</h2>
-    <p id={`${id}-description`}>Are you sure you want to log out of your account? You can sign in again any time.</p>
+    <h2 id={`${id}-title`}>{localSignOut ? 'Log out on this device?' : 'Log out of SafeWatch?'}</h2>
+    <p id={`${id}-description`}>{localSignOut ? 'This ends your session on this device. You can sign in again any time.' : 'Are you sure you want to log out of your account? You can sign in again any time.'}</p>
     {error && <p role="alert" className="sw-logout-confirm__error">{error}</p>}
     <div className="sw-logout-confirm__actions">
       <button ref={cancelButton} type="button" disabled={busy} onClick={onCancel} className="sw-logout-confirm__cancel">Cancel</button>

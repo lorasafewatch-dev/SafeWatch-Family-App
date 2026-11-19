@@ -3,6 +3,11 @@ import App from '../src/App.jsx';
 import '../src/index.css';
 import { monitoringFeatureFixture } from '../../shared/tests/monitoringFeatureFixture.js';
 const { client, state } = monitoringFeatureFixture('family');
+const fixtureSignOut = client.auth.signOut;
+client.auth.signOut = options => {
+  state.signOutScope = options?.scope;
+  return fixtureSignOut(options);
+};
 if (new URL(window.location.href).searchParams.get('push_fixture') === 'active') {
   const at = new Date().toISOString();
   state.alerts.push({ id: 2, device_id: state.devices[1].id, alert_type: 'SOS', created_at: at,

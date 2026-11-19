@@ -97,6 +97,12 @@ try {
   await page.evaluate(() => globalThis.emitSosPush('1', globalThis.monitoringFixture.requests[0].user_id));
   await page.getByRole('alert').filter({ hasText: 'Watch SOS received' }).getByRole('button', { name: 'View SOS' }).tap();
   await page.getByRole('dialog', { name: 'Alert details', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Close details', exact: true }).tap();
+  await page.getByRole('button', { name: 'Profile', exact: true }).tap();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).tap();
+  const signOut = page.getByRole('dialog', { name: 'Log out on this device?' });
+  await signOut.getByRole('button', { name: 'Confirm logout', exact: true }).tap();
+  await page.waitForFunction(() => globalThis.monitoringFixture.signOutScope === 'local');
   const apple = await browser.newContext({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', viewport: { width: 390, height: 844 } });
   const iphone = await apple.newPage();
   await iphone.goto(base);

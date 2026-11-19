@@ -29,6 +29,9 @@ import { Loader2 } from 'lucide-react';
 import { SeniorPhotoContext } from '../../shared/seniorPhotoContext.js';
 import useFamilyRequestNotifications from '../../shared/components/useFamilyRequestNotifications.js';
 import IncidentDetails from '../../shared/components/IncidentDetails.jsx';
+import useFamilyPush from './components/useFamilyPush.js';
+import SosNotificationSettings from './components/SosNotificationSettings.jsx';
+import { sosIdFromUrl } from './familyPush.js';
 
 const EMPTY_TELEMETRY = { heart_rate: null, spo2: null, battery_percent: null,
   is_sos: false, location: null, created_at: null };
@@ -38,11 +41,15 @@ const EMPTY_SENIOR = { name: 'Loading...', age: '--', gender: '--',
 
 function App({ client } = {}) {
   const supabase = client || getFamilyClient();
-  const [view, setView] = useState('dashboard');
+  const [view, setView] = useState(() => new URL(window.location.href).searchParams.get('notification_test') === '1' ? 'profile' : 'dashboard');
   const [logoutRequested, setLogoutRequested] = useState(false);
   const contentRef = React.useRef(null);
   const [startupComplete, setStartupComplete] = useState(false);
-  const { isLoggedIn, isLoadingAuth, userId, accountUser, accountPermission, pendingAccess, accessDenied, recoveryAccess, recoveryLink, authLinkError, authNotice, setAuthNotice, authError, retryAuth, privacyRequired, privacyError } = useAccountSession(supabase, 'family');
+  const { isLoggedIn, isLoadingAuth, userId, accountUser, pendingAccess, accessDenied, recoveryAccess, recoveryLink, authLinkError, authNotice, setAuthNotice, authError, retryAuth, privacyRequired, privacyError } = useAccountSession(supabase, 'family');
+  const push = useFamilyPush(supabase, isLoadingAuth ? undefined : isLoggedIn ? userId : null);
+  const [pushTargetId, setPushTargetId] = useState(() => sosIdFromUrl(window.location.href));
+  const [pushIncident, setPushIncident] = useState(null);
+  const [pushTargetError, setPushTargetError] = useState('');
   const [now, setNow] = useState(Date.now());
   const [familyAlerts, setFamilyAlerts] = useState([]);
   const [sosResponses, setSosResponses] = useState([]);
@@ -428,6 +435,8 @@ function App({ client } = {}) {
   };
 
   const commitConfirmation = incident => {
+    setPushIncident(current => String(current?.id) === String(incident.id) ? null : current);
+    setPushTargetId(current => current === String(incident.id) ? null : current);
     confirmedKeys.current.add(incident.key);
     activeAlertKeys.current.delete(incident.key);
     alertMemory.current.incidents = alertMemory.current.incidents.filter(item => item.key !== incident.key);
@@ -550,6 +559,40 @@ function App({ client } = {}) {
     };
   }, [isLoggedIn, userId, selectedDeviceId, linkedIdKey]);
 
+  const openPushIncident = React.useEffectEvent(deviceId => {
+    selectSenior(deviceId, linkedSeniorsRef.current); setView('alerts');
+  });
+
+  useEffect(() => {
+    if (!isLoggedIn || seniorListLoading || !pushTargetId) return;
+    let active = true;
+    let busy = false;
+    let opened = false;
+    const load = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const { data, error } = await withRequestTimeout(supabase.from('alerts')
+          .select('*, devices(device_name, patient_name)').eq('id', pushTargetId).eq('alert_type', 'SOS').maybeSingle(), 10000, 'Loading this SOS took too long.');
+        if (!active) return;
+        if (error) throw error;
+        if (!data || !linkedSeniorsRef.current.some(device => device.id === data.device_id)) {
+          setPushIncident(null);
+          setPushTargetError('This SOS is unavailable or is no longer linked to your family.');
+          return;
+        }
+        const incident = groupAlertIncidents([data])[0] || data;
+        if (!opened) { openPushIncident(data.device_id); opened = true; }
+        setPushIncident(incident); setPushTargetError('');
+      } catch {
+        if (active) setPushTargetError('This SOS could not be refreshed. Check your connection; SafeWatch will retry.');
+      } finally { busy = false; }
+    };
+    load();
+    const timer = setInterval(load, 5000);
+    return () => { active = false; clearInterval(timer); };
+  }, [supabase, isLoggedIn, userId, seniorListLoading, pushTargetId, linkedIdKey]);
+
   if (!startupComplete) {
     return <SplashScreen ready={!isLoadingAuth} onComplete={setStartupComplete} />;
   }
@@ -603,6 +646,7 @@ function App({ client } = {}) {
         return <AlertsView key={`${userId}:${selectedDeviceId}`} client={supabase} seniors={linkedSeniors} senior={senior} familyAlerts={familyAlerts.filter(row => row.device_id === selectedDeviceId)} now={now} confirmingKey={confirmingKey} error={alertError} handleAcknowledge={handleAcknowledgeAlert} handleDecline={incident => handleSosResponse(incident, 'declined')} handleDismissAll={() => handleDismissAll(selectedDeviceId)} sosResponses={sosResponses.filter(row => row.device_id === selectedDeviceId)} sosResponsesError={sosResponsesError} onRetryResponses={fetchSosResponseUpdates} onOpenHistory={() => setView('history')} />;
       case 'profile':
         return <div className="nature-account"><ProfileView client={supabase} handleLogout={handleLogout}>
+          <SosNotificationSettings push={push}/>
           <FamilySeniors client={supabase} seniors={linkedSeniors} selectedDeviceId={selectedDeviceId}
             loading={seniorListLoading} loadError={seniorListError} onReload={() => fetchLinkedSeniors(undefined, true)}
             onSelect={id => selectSenior(id)} onRemoved={removeLinkedSenior} onChanged={id => fetchLinkedSeniors(id, true)} />
@@ -615,7 +659,16 @@ function App({ client } = {}) {
   };
 
   const activeAlert = familyAlerts[0] || null;
-  const popupAlert = familyAlerts.find(incident => incident.key === popupKey) || null;
+  const accessiblePushIncident = pushIncident && linkedSeniors.some(item => item.id === pushIncident.device_id) ? pushIncident : null;
+  const pushNeedsResponse = accessiblePushIncident && isFamilyActionable(accessiblePushIncident)
+    && accessiblePushIncident.details?.incident_open !== false
+    && ['PENDING_FAMILY', 'ESCALATED_BHW'].includes(accessiblePushIncident.details?.status || 'PENDING_FAMILY');
+  const popupAlert = accessiblePushIncident ? pushNeedsResponse ? accessiblePushIncident : null : familyAlerts.find(incident => incident.key === popupKey) || null;
+  const closePushTarget = () => {
+    setPushIncident(null); setPushTargetId(null); setPushTargetError('');
+    const url = new URL(window.location.href); url.searchParams.delete('sos');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  };
   const clock = alertClock(activeAlert, now);
 
   return (
@@ -632,8 +685,10 @@ function App({ client } = {}) {
         </div>
       )}
       <main className="nature-content" ref={contentRef}>
+        {pushTargetError && <p role="alert" className="nature-notice">{pushTargetError}<button type="button" onClick={closePushTarget} className="ml-3 underline">Dismiss</button></p>}
         {sosNotice && linkedSeniors.some(item => item.id === sosNotice.deviceId) && <div role="status" className="sos-response-notice"><p>{sosNotice.message}</p><button type="button" onClick={() => { setView('alerts'); setSosNotice(null); }} className="mt-2 font-bold underline">View SOS updates</button><button type="button" onClick={() => setSosNotice(null)} className="ml-4 mt-2 underline">Dismiss</button></div>}
         <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length} notifications={{ app: 'family', userId, alerts: familyAlerts, responses: sosResponses, requests: accessNotifications.requests, loading: notificationsLoading, blocked: !!popupAlert, error: [notificationsError, sosResponsesError, accessNotifications.error].filter(Boolean).join(' '), onRefresh: () => { fetchFamilyAlerts(); accessNotifications.refresh(); }, onOpenNotification: item => { if (item.category === 'access') { setView('seniors'); return; } setView('alerts'); if (item.active) setPopupKey(item.incident.key); else setNotificationDetails(item.incident); } }}/>
+        {view === 'dashboard' && <SosNotificationSettings push={push} compact/>}
         {!['profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-manage-watches"><button type="button" onClick={() => setView('seniors')}>Manage watches</button></div>}
         {view !== 'profile' && seniorListError && <p role="alert" className="nature-notice">{seniorListError}</p>}
         {!['dashboard', 'location', 'profile', 'seniors', 'history'].includes(view) && linkedSeniors.length > 0 && <div className="nature-shared-selection"><SeniorSelector senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} compact/></div>}
@@ -642,9 +697,10 @@ function App({ client } = {}) {
       <FamilyNavigation view={view} setView={setView}/>
       {logoutRequested && <LogoutConfirmation client={supabase} app="family" onCancel={() => setLogoutRequested(false)} onLoggedOut={() => { setLogoutRequested(false); setView('dashboard'); }}/>}
       <AlertWarning incident={popupAlert} now={now} onConfirm={handleAcknowledgeAlert} onDecline={incident => handleSosResponse(incident, 'declined')}
-        onMinimize={() => setPopupKey(null)} busy={!!confirmingKey} error={alertError}
+        onMinimize={() => { closePushTarget(); setPopupKey(null); }} busy={!!confirmingKey} error={alertError}
         soundsBlocked={soundsBlocked} onEnableSounds={unlockSounds}/>
       {notificationDetails && linkedSeniors.some(senior => senior.id === notificationDetails.device_id) && <IncidentDetails incident={notificationDetails} onClose={() => setNotificationDetails(null)}/>}
+      {accessiblePushIncident && !pushNeedsResponse && <IncidentDetails incident={accessiblePushIncident} onClose={closePushTarget}/>}
     </div></SeniorPhotoContext.Provider>
   );
 }

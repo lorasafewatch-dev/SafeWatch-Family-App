@@ -1,0 +1,16 @@
+.sos-notification-settings{margin:1.2rem 0;padding:1.3rem;border:1px solid #cde5d8;border-radius:24px;background:rgba(255,255,255,.94);box-shadow:0 8px 28px #164d3210;color:#294f45}
+.sos-notification-settings--compact{margin:1rem 1.1rem;padding:1.1rem}
+.sos-notification-settings__heading{display:flex;align-items:center;gap:.8rem;margin-bottom:.8rem}
+.sos-notification-settings__heading>span{display:grid;place-items:center;flex-shrink:0;width:46px;height:46px;border-radius:15px;background:#e3f4eb;color:#00876b}
+.sos-notification-settings h3{font-size:1.05rem;font-weight:800;margin:0}
+.sos-notification-settings p{font-size:.85rem;line-height:1.55;margin:.4rem 0}
+.sos-notification-settings__heading p{font-size:.78rem;margin:.15rem 0 0}
+.sos-notification-settings__help{color:#657e75}
+.sos-notification-settings__check{color:#00876b;margin-left:auto;flex-shrink:0}
+.sos-notification-settings__actions{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1rem}
+.sos-notification-settings__actions button{display:flex;align-items:center;justify-content:center;gap:.5rem;min-height:46px;padding:.7rem 1rem;border:1px solid #00876b;border-radius:14px;background:#00876b;color:#fff;font-size:.85rem;font-weight:750;cursor:pointer}
+.sos-notification-settings__actions .sos-notification-settings__secondary{background:#f0f8f3;color:#326452;border-color:#cde5d8}
+.sos-notification-settings__actions button:disabled{opacity:.6;cursor:wait}
+.sos-notification-settings__actions button:focus-visible{outline:3px solid #5cc5a6;outline-offset:3px}
+.sos-notification-settings__actions svg{width:18px;height:18px}
+.sos-notification-settings__error{color:#b32636}

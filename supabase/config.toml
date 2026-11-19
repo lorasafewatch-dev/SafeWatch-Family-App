@@ -1,0 +1,4 @@
+[functions.family-sos-push]
+# A dedicated Vault dispatcher token is checked by a service-role-only RPC.
+verify_jwt = false
+entrypoint = "./functions/family-sos-push/index.ts"

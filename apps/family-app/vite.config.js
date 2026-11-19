@@ -13,6 +13,8 @@ export default defineConfig(({ command, mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        includeAssets: ['favicon.ico', 'icons/*.svg', 'icons/*-v2.png', 'sos-push-worker.js'],
+        workbox: { importScripts: ['/sos-push-worker.js'] },
         devOptions: {
           enabled: false
         },
@@ -24,12 +26,9 @@ export default defineConfig(({ command, mode }) => {
           background_color: '#edf8ef',
           display: 'standalone',
           icons: [
-            {
-              src: 'pwa-icon.svg',
-              sizes: 'any',
-              type: 'image/svg+xml',
-              purpose: 'any maskable'
-            }
+            { src: 'icons/family-192-v2.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: 'icons/family-512-v2.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: 'icons/family-maskable-512-v2.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
           ]
         }
       })

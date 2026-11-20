@@ -18,6 +18,7 @@ import { chooseFamilySenior, loadFamilySeniors, retainLinkedWatchAlerts, seniorM
 import { withRequestTimeout } from '../../shared/requestTimeout.js';
 import { getFamilyClient } from './supabaseClient.js';
 import useAccountSession from '../../shared/components/useAccountSession.js';
+import useTrustedHubs from '../../shared/components/useTrustedHubs.js';
 import AccountMfaGate from '../../shared/components/AccountMfaGate.jsx';
 import AuthEntry from './components/FamilyAuthEntry.jsx';
 import PrivacyTermsGate from '../../shared/components/PrivacyTermsGate.jsx';
@@ -47,6 +48,7 @@ function App({ client } = {}) {
   const [startupComplete, setStartupComplete] = useState(false);
   const { isLoggedIn, isLoadingAuth, reconnectingAuth, userId, accountUser, pendingAccess, accessDenied, recoveryAccess, recoveryLink, authLinkError, authNotice, setAuthNotice, authError, retryAuth, privacyRequired, privacyError } = useAccountSession(supabase, 'family');
   const push = useFamilyPush(supabase, isLoadingAuth ? undefined : isLoggedIn ? userId : null);
+  const { hubs: trustedHubs, error: trustedHubsError } = useTrustedHubs(supabase, isLoggedIn ? userId : null);
   const [pushTargetId, setPushTargetId] = useState(() => sosIdFromUrl(window.location.href));
   const [pushIncident, setPushIncident] = useState(null);
   const [pushTargetError, setPushTargetError] = useState('');
@@ -196,7 +198,7 @@ function App({ client } = {}) {
 
   const [telemetry, setTelemetry] = useState(EMPTY_TELEMETRY);
   const [seniorRecord, setSenior] = useState(EMPTY_SENIOR);
-  const senior = { ...seniorRecord, safeZone: linkedSeniors.find(device => device.id === seniorRecord.deviceId)?.family_safe_zone ?? null };
+  const senior = { ...seniorRecord, trustedHubs, safeZone: linkedSeniors.find(device => device.id === seniorRecord.deviceId)?.family_safe_zone ?? null };
 
   const handleSafeZoneSaved = (deviceId, zone) => {
     // An older list request must not replace the zone that was just saved.
@@ -673,7 +675,7 @@ function App({ client } = {}) {
       case 'dashboard':
         return <DashboardView now={now} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} familyAlerts={familyAlerts} setView={setView} />;
       case 'location':
-        return <LocationView key={senior.deviceId || 'waiting'} client={supabase} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} now={now} onSafeZoneSaved={handleSafeZoneSaved} onReloadSafeZone={() => fetchLinkedSeniors(undefined, true)} />;
+        return <LocationView key={senior.deviceId || 'waiting'} client={supabase} senior={senior} seniors={linkedSeniors} selectedId={selectedDeviceId} onSelect={selectSenior} telemetry={telemetry} now={now} trustedHubsError={trustedHubsError} onSafeZoneSaved={handleSafeZoneSaved} onReloadSafeZone={() => fetchLinkedSeniors(undefined, true)} />;
       case 'health':
         return <HealthView key={userId} client={supabase} senior={senior} telemetry={telemetry} now={now} />;
       case 'alerts':

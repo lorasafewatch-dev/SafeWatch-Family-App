@@ -8,6 +8,8 @@ The service worker displays a generic lock-screen message with no senior name, p
 
 The alert insertion writes a private outbox entry for each approved linked family's subscribed device. The five-second database dispatcher invokes the `family-sos-push` Edge Function. The sender rechecks active sessions, account approval, consent, MFA, watch linkage and incident status before delivery. Sign-out, revocation and completion prevent queued delivery. Repeated watch packets do not create additional notifications; delivery IDs, leases, notification tags and persistent worker receipts suppress retries. Expired endpoints are disabled and delivery records are retained for three days. The existing three-minute unanswered SOS transfer is independent of push delivery.
 
+When barangay confirms an SOS, subscribed family devices receive **Barangay personnel are on the way**. When staff selects **Mark as arrived**, those devices receive **Barangay personnel have arrived**. Tapping either notification opens the current saved response for that incident. Apply `supabase/migrations/20261120044500_family_barangay_response_push.sql` and `supabase/migrations/20261120045500_barangay_sos_arrival.sql` in order, then deploy the updated barangay dashboard and Family PWA. The existing Edge Function and push configuration handle both alerts.
+
 Deployment requires the migration, the Edge Function and these two encrypted Supabase Vault secrets, generated once and kept out of source control:
 
 - `safewatch_family_push_dispatch`: a random 32-byte hexadecimal dispatcher token.

@@ -25,7 +25,7 @@ export default function SosNotificationSettings({ push, compact = false, onLater
       <li>Open SafeWatch from your Home Screen, sign in, and tap <strong>Enable SOS notifications</strong>.</li>
     </ol> : unsupported ? <p>Background notifications are unavailable in this browser. Open SafeWatch in a current browser that supports Web Push.</p>
       : status === 'blocked' ? <p>Notifications are blocked. Allow SafeWatch in your browser’s site permissions or your device’s notification settings.</p>
-      : <p>When a linked senior sends an SOS, tap the notification to open that alert. Sound and vibration follow this device’s settings.</p>}
+      : <p>Get notified when a linked senior sends an SOS and when barangay personnel are on the way or have arrived. Tap the notification to view the SOS. Sound and vibration follow this device’s settings.</p>}
     {!compact && !onLater && !needsInstall && !unsupported && <p className="sos-notification-settings__help">If notifications are quiet, check the device’s notification volume and Do Not Disturb settings.</p>}
     {error && status !== 'blocked' && <p role="alert" className="sos-notification-settings__error">{error}</p>}
     {notice && <p role="status">{notice}</p>}

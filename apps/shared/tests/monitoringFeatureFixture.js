@@ -74,6 +74,19 @@ export function monitoringFeatureFixture(app) {
         return { data: args.p_device_id, error: null };
       }
       if (name === 'set_senior_photo') { const device = devices.find(row => row.id === args.p_device_id); const previous_path = device.photo_path; device.photo_path = args.p_path; return { data: { photo_path: args.p_path, previous_path }, error: null }; }
+      if (name === 'mark_sos_arrived') {
+        const row = alerts.find(item => String(item.id) === String(args.p_alert_id));
+        if (state.failSosResponse || app === 'family' || row?.details.status !== 'ACKNOWLEDGED_BHW') {
+          return { error: new Error('Arrival was not saved') };
+        }
+        if (!row.details.sos_arrived_at) {
+          const at = new Date().toISOString();
+          Object.assign(row.details, { sos_arrived_at: at, sos_arrived_by: auth.state.currentId, sos_response_at: at,
+            sos_response_version: (row.details.sos_response_version || 0) + 1 });
+          refresh();
+        }
+        return { data: { saved: true, alert: structuredClone(row) }, error: null };
+      }
       if (name === 'respond_to_sos') {
         if (state.failSosResponse) return { error: new Error('Response not saved') };
         const row = alerts.find(row => row.id === args.p_alert_id), at = new Date().toISOString();

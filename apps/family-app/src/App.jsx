@@ -3,7 +3,7 @@ import { telemetryTimestamp } from '../../shared/gpsStatus.js';
 import { gpsObservation, retainGpsObservation, loadLastGpsObservation } from '../../shared/gpsLocation.js';
 import { ALERT_QUERY_FILTER, acknowledgeIncident, alertClock, alertTitle, batteryAlertMessage, confirmationErrorMessage, formatDuration, groupAlertIncidents, incidentSnapshot, planAlertSounds } from '../../shared/alertLifecycle.js';
 import { enableAlertSounds, playAlertSound, stopAlertSounds } from '../../shared/alertSound.js';
-import { isFamilyActionable, loadSosResponses, mergeSosResponse, respondToSos, sosResponseError, sosResponseState } from '../../shared/sosResponse.js';
+import { barangaySosStage, isFamilyActionable, loadSosResponses, mergeSosResponse, respondToSos, sosResponseError, sosResponseState } from '../../shared/sosResponse.js';
 import AlertWarning from './components/AlertWarning.jsx';
 import LocationView from './components/LocationView.jsx';
 import ProfileView from './components/ProfileView.jsx';
@@ -40,6 +40,8 @@ const EMPTY_TELEMETRY = { heart_rate: null, spo2: null, battery_percent: null,
 const EMPTY_SENIOR = { name: 'Loading...', age: '--', gender: '--',
   location: 'No GPS location recorded', position: null, positionAt: null,
   latestHasGpsFix: false, isInsideSafeZone: false };
+const RESPONSE_NOTICE_DURATION = 5 * 60 * 1000;
+const barangayNoticeKey = incident => [incident.id, barangaySosStage(incident)].join(':');
 
 function App({ client } = {}) {
   const supabase = client || getFamilyClient();
@@ -62,6 +64,7 @@ function App({ client } = {}) {
   const [notificationsError, setNotificationsError] = useState('');
   const [popupKey, setPopupKey] = useState(null);
   const [sosNotice, setSosNotice] = useState(null);
+  const [dismissedBarangayResponses, setDismissedBarangayResponses] = useState(() => new Set());
   const [notificationDetails, setNotificationDetails] = useState(null);
   const accessNotifications = useFamilyRequestNotifications(supabase, isLoggedIn ? userId : null, 'family');
   const [confirmingKey, setConfirmingKey] = useState(null);
@@ -104,6 +107,7 @@ function App({ client } = {}) {
     setLogoutRequested(false);
     setNotificationDetails(null);
     setSosNotice(null);
+    setDismissedBarangayResponses(new Set());
     setForegroundSosId(null);
     alertMemory.current = { incidents: [], ledger: {} };
     lastGpsByDevice.current = new Map();
@@ -549,9 +553,9 @@ function App({ client } = {}) {
       const controller = serviceWorker?.controller;
       const payload = event.data;
       if (!controller || event.source?.scriptURL !== controller.scriptURL
-          || payload?.type !== 'SAFEWATCH_SOS_PUSH' || payload.userId !== userId
+          || !['SAFEWATCH_SOS_PUSH', 'SAFEWATCH_BARANGAY_RESPONSE'].includes(payload?.type) || payload.userId !== userId
           || typeof payload.alertId !== 'string' || !/^[1-9]\d{0,18}$/.test(payload.alertId) || document.hidden) return;
-      setForegroundSosId(payload.alertId);
+      if (payload.type === 'SAFEWATCH_SOS_PUSH') setForegroundSosId(payload.alertId);
       fetchFamilyAlerts(true);
     };
     serviceWorker?.addEventListener?.('message', openAppPush);
@@ -684,12 +688,23 @@ function App({ client } = {}) {
     }
   };
 
-  const activeAlert = familyAlerts[0] || null;
-  const accessiblePushIncident = pushIncident && linkedSeniors.some(item => item.id === pushIncident.device_id) ? pushIncident : null;
+  const barangayResponses = sosResponses.filter(barangaySosStage);
+  const barangayNotice = barangayResponses.find(incident => !dismissedBarangayResponses.has(barangayNoticeKey(incident))
+    && now - Date.parse(incident.details.sos_arrived_at || incident.details.sos_response_at
+      || incident.details.acknowledged_at || incident.details.sos_responses?.barangay?.at) < RESPONSE_NOTICE_DURATION
+    && linkedSeniors.some(item => item.id === incident.device_id));
+  const dismissBarangayNotice = () => setDismissedBarangayResponses(current => new Set([...current, barangayNoticeKey(barangayNotice)]));
+  const hasBarangayResponse = id => barangayResponses.some(incident => String(incident.id) === String(id));
+  const activeAlert = familyAlerts.find(incident => !hasBarangayResponse(incident.id)) || null;
+  const showForegroundSos = foregroundSosId && !hasBarangayResponse(foregroundSosId);
+  const latestNotificationDetails = barangayResponses.find(incident => String(incident.id) === String(notificationDetails?.id)) || notificationDetails;
+  const latestPushIncident = barangayResponses.find(incident => String(incident.id) === String(pushIncident?.id)) || pushIncident;
+  const accessiblePushIncident = latestPushIncident && linkedSeniors.some(item => item.id === latestPushIncident.device_id) ? latestPushIncident : null;
   const pushNeedsResponse = accessiblePushIncident && isFamilyActionable(accessiblePushIncident)
     && accessiblePushIncident.details?.incident_open !== false
     && ['PENDING_FAMILY', 'ESCALATED_BHW'].includes(accessiblePushIncident.details?.status || 'PENDING_FAMILY');
-  const popupAlert = accessiblePushIncident ? pushNeedsResponse ? accessiblePushIncident : null : familyAlerts.find(incident => incident.key === popupKey) || null;
+  const popupAlert = accessiblePushIncident ? pushNeedsResponse ? accessiblePushIncident : null
+    : familyAlerts.find(incident => incident.key === popupKey && !hasBarangayResponse(incident.id)) || null;
   const closePushTarget = () => {
     setPushIncident(null); setPushTargetId(null); setPushTargetError('');
     const url = new URL(window.location.href); url.searchParams.delete('sos');
@@ -700,6 +715,22 @@ function App({ client } = {}) {
   return (
     <SeniorPhotoContext.Provider value={{ client: supabase, seniors: linkedSeniors }}><div className="family-nature">
       <div className="nature-background" aria-hidden="true"/>
+      {barangayNotice && <aside className="family-response-banner" key={barangayNoticeKey(barangayNotice)}>
+        <div role="alert">
+          <strong>{sosResponseState(barangayNotice).message}</strong>
+          <p>{linkedSeniors.find(item => item.id === barangayNotice.device_id)?.patient_name || 'Linked senior'}</p>
+        </div>
+        <div className="family-response-banner__actions">
+          <button type="button" onClick={() => {
+            dismissBarangayNotice();
+            closePushTarget();
+            selectSenior(barangayNotice.device_id);
+            setView('alerts');
+            setNotificationDetails(barangayNotice);
+          }}>View SOS response</button>
+          <button type="button" onClick={dismissBarangayNotice}>Dismiss</button>
+        </div>
+      </aside>}
       {activeAlert && !popupAlert && (
         <div className="relative z-[2001] bg-orange-50 border-b border-orange-200 px-5 py-4">
           <button onClick={() => setPopupKey(activeAlert.key)} className="w-full text-left text-sm font-bold text-orange-900">
@@ -712,12 +743,12 @@ function App({ client } = {}) {
       )}
       <main className="nature-content" ref={contentRef}>
         {pushTargetError && <p role="alert" className="nature-notice">{pushTargetError}<button type="button" onClick={closePushTarget} className="ml-3 underline">Dismiss</button></p>}
-        {foregroundSosId && !popupAlert && !pushTargetId && <div role="alert" className="sos-response-notice">
+        {showForegroundSos && !popupAlert && !pushTargetId && <div role="alert" className="sos-response-notice">
           <p>Watch SOS received</p>
           <button type="button" className="mt-2 font-bold underline" onClick={() => { setPushTargetId(foregroundSosId); setForegroundSosId(null); }}>View SOS</button>
           <button type="button" className="ml-4 mt-2 underline" onClick={() => setForegroundSosId(null)}>Dismiss</button>
         </div>}
-        {sosNotice && linkedSeniors.some(item => item.id === sosNotice.deviceId) && <div role="status" className="sos-response-notice"><p>{sosNotice.message}</p><button type="button" onClick={() => { setView('alerts'); setSosNotice(null); }} className="mt-2 font-bold underline">View SOS updates</button><button type="button" onClick={() => setSosNotice(null)} className="ml-4 mt-2 underline">Dismiss</button></div>}
+        {sosNotice && !hasBarangayResponse(sosNotice.incidentId) && linkedSeniors.some(item => item.id === sosNotice.deviceId) && <div role="status" className="sos-response-notice"><p>{sosNotice.message}</p><button type="button" onClick={() => { setView('alerts'); setSosNotice(null); }} className="mt-2 font-bold underline">View SOS updates</button><button type="button" onClick={() => setSosNotice(null)} className="ml-4 mt-2 underline">Dismiss</button></div>}
         <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length} notifications={{ app: 'family', userId, alerts: familyAlerts, responses: sosResponses, requests: accessNotifications.requests, loading: notificationsLoading, blocked: !!popupAlert, error: [notificationsError, sosResponsesError, accessNotifications.error].filter(Boolean).join(' '), onRefresh: () => { fetchFamilyAlerts(); accessNotifications.refresh(); }, onOpenNotification: item => { if (item.category === 'access') { setView('seniors'); return; } setView('alerts'); if (item.active) setPopupKey(item.incident.key); else setNotificationDetails(item.incident); } }}/>
         {reconnectingAuth && <p role="status" className="nature-notice">Reconnecting to SafeWatch. Some readings may be delayed.</p>}
         {view === 'dashboard' && <SosNotificationSettings push={push} compact/>}
@@ -728,12 +759,12 @@ function App({ client } = {}) {
       </main>
       <FamilyNavigation view={view} setView={setView}/>
       <SosNotificationSetup key={userId} userId={userId} push={push}
-        paused={seniorListLoading || !!(popupAlert || activeAlert?.alert_type === 'SOS' || foregroundSosId || pushTargetId || notificationDetails || logoutRequested)}/>
+        paused={seniorListLoading || !!(popupAlert || activeAlert?.alert_type === 'SOS' || barangayNotice || showForegroundSos || pushTargetId || notificationDetails || logoutRequested)}/>
       {logoutRequested && <LogoutConfirmation client={supabase} app="family" onCancel={() => setLogoutRequested(false)} onLoggedOut={() => { setLogoutRequested(false); setView('dashboard'); }}/>}
       <AlertWarning incident={popupAlert} now={now} onConfirm={handleAcknowledgeAlert} onDecline={incident => handleSosResponse(incident, 'declined')}
         onMinimize={() => { closePushTarget(); setPopupKey(null); }} busy={!!confirmingKey} error={alertError}
         soundsBlocked={soundsBlocked} onEnableSounds={unlockSounds}/>
-      {notificationDetails && linkedSeniors.some(senior => senior.id === notificationDetails.device_id) && <IncidentDetails incident={notificationDetails} onClose={() => setNotificationDetails(null)}/>}
+      {latestNotificationDetails && linkedSeniors.some(senior => senior.id === latestNotificationDetails.device_id) && <IncidentDetails incident={latestNotificationDetails} onClose={() => setNotificationDetails(null)}/>}
       {accessiblePushIncident && !pushNeedsResponse && <IncidentDetails incident={accessiblePushIncident} onClose={closePushTarget}/>}
     </div></SeniorPhotoContext.Provider>
   );

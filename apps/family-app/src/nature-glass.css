@@ -19,6 +19,11 @@
 .family-nature *, .family-nature *::before, .family-nature *::after { box-sizing: border-box; }
 .nature-background { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, #f2fcf043, #eff9f0a6 47%, #ecf7f0bd), url('./assets/nature-garden.webp') center / cover; }
 .nature-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: max(20px, env(safe-area-inset-top)) 17px 20px; scrollbar-width: thin; scrollbar-color: #a8c6b799 transparent; }
+.family-response-banner { flex-shrink: 0; padding: max(12px, env(safe-area-inset-top)) 20px 4px; background: #e0f5e9; color: #145539; border-bottom: 1px solid #a6d3bb; }
+.family-response-banner strong { display: block; font-size: 1rem; line-height: 1.3; }
+.family-response-banner p { margin: 2px 0 0; overflow-wrap: anywhere; font-size: .875rem; }
+.family-response-banner__actions { display: flex; flex-wrap: wrap; gap: 0 18px; }
+.family-response-banner__actions button { min-height: 44px; color: inherit; font-size: .875rem; font-weight: 650; text-decoration: underline; }
 .nature-brand { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin: 0 7px 19px; }
 .nature-brand__identity { display: flex; align-items: center; gap: 10px; }
 .nature-brand__mark { display: grid; place-items: center; width: 36px; height: 40px; border-radius: 12px 12px 17px 17px; background: linear-gradient(150deg, #00b880, #008f68); color: #fff; }

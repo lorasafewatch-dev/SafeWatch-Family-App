@@ -26,7 +26,7 @@ self.addEventListener('message', event => {
 
 function pushTarget(data) {
   if (data?.kind === 'test') return '/?notification_test=1';
-  if (data?.kind === 'sos' && /^[1-9]\d{0,18}$/.test(String(data.alertId))) return `/?sos=${data.alertId}`;
+  if (['sos', 'barangay_on_the_way', 'barangay_arrived'].includes(data?.kind) && /^[1-9]\d{0,18}$/.test(String(data.alertId))) return `/?sos=${data.alertId}`;
   return null;
 }
 
@@ -40,28 +40,35 @@ self.addEventListener('push', event => {
     const receiptCache = await caches.open(PUSH_RECEIPTS);
     const receipt = new URL(`/__safewatch_push_receipt/${encodeURIComponent(data.deliveryId)}`, self.location.origin).href;
     if (await receiptCache.match(receipt)) return;
+    const arrived = data.kind === 'barangay_arrived';
+    const barangayResponse = arrived || data.kind === 'barangay_on_the_way';
     const reactivated = data.kind === 'sos' && data.reactivated === true;
     const notifyOpenApp = async () => {
-      if (data.kind !== 'sos') return;
+      if (data.kind === 'test') return;
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const window of windows) {
         if (window.visibilityState !== 'visible' || new URL(window.url).origin !== self.location.origin) continue;
-        window.postMessage({ type: 'SAFEWATCH_SOS_PUSH', alertId: String(data.alertId), userId: data.userId });
+        window.postMessage({ type: barangayResponse ? 'SAFEWATCH_BARANGAY_RESPONSE' : 'SAFEWATCH_SOS_PUSH', alertId: String(data.alertId), userId: data.userId });
       }
     };
-    const notification = self.registration.showNotification(data.kind === 'test' ? 'SafeWatch notification test' : 'SafeWatch · SOS alert', {
+    const title = data.kind === 'test' ? 'SafeWatch notification test'
+      : arrived ? 'Barangay personnel have arrived'
+      : barangayResponse ? 'Barangay personnel are on the way' : 'SafeWatch · SOS alert';
+    const notification = self.registration.showNotification(title, {
       body: data.kind === 'test' ? 'Background notifications are working. Tap to open SafeWatch.'
+        : barangayResponse ? 'Tap to view the SOS response in SafeWatch.'
         : reactivated ? 'A linked senior’s watch activated SOS again. Tap to view the alert.'
         : 'A linked senior’s watch sent an SOS. Tap to open the alert and respond.',
       icon: '/icons/family-192-v2.png',
       badge: '/icons/notification-badge.svg',
       tag: data.kind === 'test' ? `safewatch-test-${data.deliveryId}`
+        : barangayResponse ? `safewatch-${data.kind}-${data.alertId}`
         : reactivated ? `safewatch-sos-${data.alertId}-${data.deliveryId}` : `safewatch-sos-${data.alertId}`,
-      silent: false, renotify: false, requireInteraction: true,
-      vibrate: [300, 150, 300, 150, 500],
+      silent: false, renotify: false, requireInteraction: !barangayResponse,
+      vibrate: barangayResponse ? [150] : [300, 150, 300, 150, 500],
       timestamp: Date.parse(data.createdAt) || Date.now(),
       data: { target },
-      actions: [{ action: 'open', title: data.kind === 'test' ? 'Open SafeWatch' : 'Open SOS' }],
+      actions: [{ action: 'open', title: data.kind === 'test' ? 'Open SafeWatch' : barangayResponse ? 'View response' : 'Open SOS' }],
     });
     const [result] = await Promise.allSettled([notification, notifyOpenApp()]);
     if (result.status === 'rejected') throw result.reason;

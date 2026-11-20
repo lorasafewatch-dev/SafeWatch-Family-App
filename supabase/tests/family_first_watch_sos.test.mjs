@@ -119,6 +119,12 @@ try {
   const reactivation = await readFile(new URL('../migrations/20261119173013_family_sos_reactivation_push.sql',import.meta.url),'utf8');
   await pg.exec(reactivation);
   await pg.exec(reactivation);
+  const responsePush = await readFile(new URL('../migrations/20261120044500_family_barangay_response_push.sql', import.meta.url), 'utf8');
+  await pg.exec(responsePush);
+  await pg.exec(responsePush);
+  const arrivalMigration = await readFile(new URL('../migrations/20261120045500_barangay_sos_arrival.sql', import.meta.url), 'utf8');
+  await pg.exec(arrivalMigration);
+  await pg.exec(arrivalMigration);
   for (const endpoint of ['https://fcm.googleapis.com/wp/synthetic','https://web.push.apple.com/synthetic']) {
     await asUser(family, () => q('SELECT save_family_push_subscription($1,$2)', [
       { endpoint, keys: { p256dh: 'B' + 'A'.repeat(86), auth: 'a'.repeat(22) } }, family
@@ -128,6 +134,8 @@ try {
   await q("INSERT INTO vault.decrypted_secrets VALUES('safewatch_family_push_dispatch',$1),('safewatch_family_push_vapid','{}')", [token]);
   const deliveries = id => q('SELECT * FROM safewatch_private.family_push_deliveries WHERE alert_id=$1 ORDER BY activation_packet_id', [id]);
   const claimPush = async () => (await q('SELECT claim_family_sos_push($1) AS batch', [token]))[0].batch.deliveries;
+  const markArrival = (row, user = staff) => asUser(user, async () =>
+    (await q('SELECT mark_sos_arrived($1) result', [row.id]))[0].result.alert);
   await packet();
   const next = await current();
   assert.equal((await deliveries(next.id)).length,2);
@@ -137,6 +145,8 @@ try {
   await packet();
   assert.equal((await deliveries(next.id)).length,2);
   await respond(next,'declined');
+  assert.equal((await claimPush()).length, 0, 'the transfer itself does not send an on-the-way notification');
+  await assert.rejects(markArrival(next), error => error.code === '40001');
   await packet(watch,0,false);
   await packet(watch,0,false);
   const marker = (await q('SELECT clock_timestamp() at'))[0].at;
@@ -156,8 +166,32 @@ try {
   assert.ok(repeatedPush.every(delivery => delivery.payload.reactivated === true && delivery.payload.alertId === String(next.id)));
   await packet(watch,0,false);
   await packet();
-  await respond(await current(),'confirmed',staff,'barangay');
-  assert.equal((await claimPush()).length,0,'acknowledgment cancels reactivation delivery still in the queue');
+  const confirmed = await respond(await current(),'confirmed',staff,'barangay');
+  await respond(confirmed,'confirmed',staff,'barangay');
+  const confirmedPush = await claimPush();
+  assert.equal(confirmedPush.length, 2, 'the queued reactivation is replaced by one confirmation per subscription');
+  assert.ok(confirmedPush.every(({ payload }) => payload.kind === 'barangay_on_the_way'
+    && payload.userId === family && payload.alertId === String(next.id) && payload.reactivated === false));
+  assert.equal((await deliveries(next.id)).filter(row => row.kind === 'barangay_on_the_way').length, 2);
+  const canDeliver = async ({ id, lease }) => (await q('SELECT family_push_delivery_current($1,$2) AS allowed', [id, lease]))[0].allowed;
+  assert.equal(await canDeliver(confirmedPush[0]), true);
+  for (const { id, lease } of confirmedPush) await q("SELECT finish_family_sos_push($1,$2,'sent')", [id, lease]);
+  await assert.rejects(markArrival(confirmed, family), error => error.code === '42501');
+  const arrived = await markArrival(confirmed);
+  assert.equal(arrived.details.sos_arrived_by, staff);
+  assert.equal(arrived.details.acknowledged_at, confirmed.details.acknowledged_at);
+  assert.equal(arrived.details.sos_response_version, confirmed.details.sos_response_version + 1);
+  assert.equal((await markArrival(arrived)).details.sos_arrived_at, arrived.details.sos_arrived_at);
+  assert.equal((await feed(family))[0].details.sos_arrived_at, arrived.details.sos_arrived_at);
+  const arrivalPush = await claimPush();
+  assert.equal(arrivalPush.length, 2);
+  assert.ok(arrivalPush.every(({ payload }) => payload.kind === 'barangay_arrived' && payload.userId === family
+    && payload.alertId === String(next.id)));
+  assert.equal((await deliveries(next.id)).filter(row => row.kind === 'barangay_arrived').length, 2);
+  assert.equal(await canDeliver(arrivalPush[0]), true);
+  await q('DELETE FROM family_seniors WHERE user_id=$1 AND device_id=$2', [family, watch]);
+  assert.equal(await canDeliver(arrivalPush[0]), false, 'revocation prevents queued arrival delivery');
+  await q('INSERT INTO family_seniors(user_id,device_id) VALUES($1,$2)', [family, watch]);
   await packet(watch,0,false);
   await packet();
   const fresh = await current();
@@ -165,6 +199,23 @@ try {
   assert.equal((await deliveries(fresh.id)).length,2);
   assert.ok((await claimPush()).every(delivery => delivery.payload.reactivated === false && delivery.payload.alertId === String(fresh.id)));
   console.log('PASS SOS stop and reactivation rings both subscribed devices without moving the deadline, GPS pin, or barangay handoff');
+  await respond(fresh, 'confirmed');
+  await assert.rejects(markArrival(fresh), error => error.code === '40001');
+  assert.equal((await claimPush()).length, 0, 'family confirmation never sends an on-the-way notification');
+
+  const manualId = (await asUser(family, () => q('SELECT request_family_sos($1) AS id', [watch])))[0].id;
+  const manual = (await readAlert(staff, manualId))[0];
+  assert.equal(manual.details.sos_transfer_reason, 'family_request');
+  assert.equal((await claimPush()).length, 0);
+  const confirmedManual = await respond(manual, 'confirmed', staff, 'barangay');
+  assert.equal(confirmedManual.details.incident_open, false);
+  const manualPush = await claimPush();
+  assert.equal(manualPush.length, 2);
+  assert.ok(manualPush.every(({ payload }) => payload.kind === 'barangay_on_the_way' && payload.alertId === String(manualId)));
+  await markArrival(confirmedManual);
+  assert.equal(await canDeliver(manualPush[0]), false, 'en route push is stale after arrival');
+  assert.equal((await claimPush()).filter(({ payload }) => payload.kind === 'barangay_arrived').length, 2);
+  console.log('PASS barangay acceptance and arrival go once to linked, subscribed family devices with staff-only arrival, stable retries, preserved acceptance time and revocation checks');
 } catch (error) { console.error(JSON.stringify({ message: error.message, code: error.code, detail: error.detail, where: error.where })); process.exitCode=1; }
 finally { await pg.close(); }
 

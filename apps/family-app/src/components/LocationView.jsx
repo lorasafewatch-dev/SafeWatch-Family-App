@@ -62,7 +62,7 @@ export default function LocationView({ client, senior, seniors, selectedId, onSe
       <MapContainer bounds={initialBounds} boundsOptions={{ padding: [24, 24], maxZoom: 15 }} style={{ width: '100%', height: '100%' }}>
         <SafeWatchTiles/>
         <FamilySafeZoneLayer/>
-        <TrustedHubLayers hubs={locations}/>
+        <TrustedHubLayers hubs={locations} seniorName={senior.name}/>
         {state.known && <Marker position={position} icon={icon} title={`${senior.name}'s detected position`}>
           <Popup autoPan={false}><p className="font-bold">{senior.name}</p><p>{status}</p><p>{zoneStatus}</p><p>GPS detected: {new Date(senior.positionAt).toLocaleString()}</p></Popup>
         </Marker>}

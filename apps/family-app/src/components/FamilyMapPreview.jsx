@@ -31,7 +31,7 @@ export default function FamilyMapPreview({ senior, now }) {
       <SafeWatchTiles/>
       <PreviewBounds lat={state.known ? senior.position.lat : null} lng={state.known ? senior.position.lng : null} location={state.location} inside={inside}/>
       <FamilySafeZoneLayer/>
-      <TrustedHubLayers hubs={senior.safeLocations}/>
+      <TrustedHubLayers hubs={senior.safeLocations} seniorName={senior.name}/>
       {state.known && <Marker position={[senior.position.lat, senior.position.lng]} icon={icon} interactive={false} keyboard={false}/>}
     </MapContainer>
   </div>;

@@ -134,7 +134,7 @@
 .nature-zone h2 { margin: 1px 0 4px; font-size: 18px; font-weight: 650; }
 .nature-zone__heading p, .nature-zone__saved p { margin: 0; color: #617a92; font-size: 12px; line-height: 1.5; }
 .nature-zone__saved { display: flex; align-items: center; gap: 10px; padding: 13px; margin-bottom: 13px; border: 1px solid #d6eadf; border-radius: 15px; background: #edf9f1; }
-.nature-zone__saved > svg { color: #009a70; flex-shrink: 0; width: 23px; height: 24px; }
+.nature-zone__saved > svg { flex-shrink: 0; width: 23px; height: 24px; }
 .nature-zone h3 { margin: 0 0 3px; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .nature-zone-primary, .nature-zone-secondary { display: flex; justify-content: center; align-items: center; gap: 7px; min-height: 43px; padding: 10px 15px; border: 1px solid #008c69; border-radius: 13px; color: #fff; background: #009a70; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .nature-zone-primary > svg { width: 17px; height: 18px; }
@@ -152,7 +152,7 @@
 .nature-zone__map { position: relative; height: 240px; border: 1px solid #c7ddd0; border-radius: 15px; overflow: hidden; }
 .nature-zone__map .leaflet-container { cursor: crosshair; }
 .nature-zone__map .leaflet-control-attribution { font-size: 8px; }
-.nature-zone-pin { display: grid; place-items: center; color: #fff; font-size: 24px; line-height: 1; border: 3px solid #fff; border-radius: 50%; background: #d97706; box-shadow: 0 2px 7px #0004; }
+.nature-zone-pin { display: grid; place-items: center; color: #fff; font-size: 24px; line-height: 1; border: 3px solid #fff; border-radius: 50%; background: var(--safe-location-color); box-shadow: 0 2px 7px #0004; }
 .nature-zone-watch, .nature-zone-map-fit { position: absolute; z-index: 1000; right: 9px; padding: 8px 10px; border: 1px solid #d1e0d7; border-radius: 9px; color: #285443; background: #fffffff5; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 7px #0001; }
 .nature-zone-watch { top: 9px; display: flex; align-items: center; gap: 5px; }
 .nature-zone-watch svg { width: 15px; height: 15px; }

@@ -13,7 +13,7 @@ import { FamilyPageTitle, Freshness, SeniorSelector, locationPresentation } from
 import { createFamilyMarker } from '../familyMapMarker.js';
 import LocationHistory from '../../../shared/components/LocationHistory.jsx';
 
-function MapControls({ position, bounds }) {
+function MapControls({ position, locations }) {
   const map = useMap();
   const controls = useRef(null);
   useEffect(() => {
@@ -27,24 +27,28 @@ function MapControls({ position, bounds }) {
     }}><LocateFixed aria-hidden="true"/>Center watch</button>
     <button type="button" onClick={() => {
       map.stop();
-      map.fitBounds(bounds, { padding: [24, 24], maxZoom: 17, animate: false });
-    }}><Shield aria-hidden="true"/>Show safe zone</button>
+      map.fitBounds(familyZoneBounds(null), { padding: [24, 24], maxZoom: 17, animate: false });
+    }}><Shield aria-hidden="true"/>Show district</button>
+    {locations.length > 0 && <select aria-label="Show safe location" value="" onChange={event => {
+      const location = locations.find(item => item.id === event.target.value);
+      if (location) map.stop().fitBounds(familyZoneBounds(location), { padding: [28, 28], maxZoom: 17, animate: false });
+    }}><option value="" disabled>Show safe location</option>{locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</select>}
   </div>;
 }
 
-export default function LocationView({ client, senior, seniors, selectedId, onSelect, disabled, telemetry, now, trustedHubsError, onSafeZoneSaved, onReloadSafeZone }) {
+export default function LocationView({ client, senior, seniors, selectedId, onSelect, disabled, telemetry, now, safeLocationsError, onSafeLocationSaved, onReloadSafeLocations }) {
   const state = locationPresentation(senior, now);
   const position = state.known ? [senior.position.lat, senior.position.lng] : null;
   // Only explicit map controls move the camera after this initial fit.
-  const bounds = [...familyZoneBounds(senior.safeZone), ...(senior.trustedHubs ?? []).flatMap(familyZoneBounds)];
-  const [initialBounds] = useState(() => [...bounds, ...(position ? [position] : [])]);
+  const locations = senior.safeLocations ?? [];
+  const [initialBounds] = useState(() => familyZoneBounds(state.location));
   const { live, inside } = state;
   const icon = useMemo(() => L.divIcon({
     html: createFamilyMarker({ live, inside }),
     className: 'family-location-marker', iconSize: [48, 48], iconAnchor: [24, 24], popupAnchor: [0, -24],
   }), [live, inside]);
   const status = state.live ? 'Live GPS location' : state.known ? 'Last known location' : 'No location recorded';
-  const zoneStatus = state.known ? `${state.hub ? 'At a trusted hub' : `${state.inside ? 'Inside' : 'Outside'} safe zone`}${state.live ? '' : ' at last detection'}` : 'Waiting for a GPS fix';
+  const zoneStatus = state.known ? `${state.location ? 'At a safe location' : state.inside ? 'Inside San Isidro East' : 'Outside monitored areas'}${state.live ? '' : ' at last detection'}` : 'Waiting for a GPS fix';
 
   return <div className="nature-location">
     <FamilyPageTitle title="Location">{state.live ? `See where ${senior.name} is now.` : state.known ? `Last recorded position for ${senior.name}.` : `Waiting for ${senior.name}'s first GPS fix.`}</FamilyPageTitle>
@@ -53,23 +57,23 @@ export default function LocationView({ client, senior, seniors, selectedId, onSe
       <Freshness>{state.freshness}</Freshness>
     </div>
     {!state.live && <p role="status" className="nature-notice">{state.known ? 'GPS updates are unavailable. The marker stays at the last detected position.' : 'No GPS position has been recorded for this watch yet. The safe-zone boundary is shown below.'}</p>}
-    {trustedHubsError && <p role="status" className="nature-notice">{trustedHubsError}</p>}
+    {safeLocationsError && <p role="status" className="nature-notice">{safeLocationsError}</p>}
     <section aria-label="Family location map" className="nature-location__map">
       <MapContainer bounds={initialBounds} boundsOptions={{ padding: [24, 24], maxZoom: 15 }} style={{ width: '100%', height: '100%' }}>
         <SafeWatchTiles/>
-        <FamilySafeZoneLayer zone={senior.safeZone}/>
-        <TrustedHubLayers hubs={senior.trustedHubs}/>
+        <FamilySafeZoneLayer/>
+        <TrustedHubLayers hubs={locations}/>
         {state.known && <Marker position={position} icon={icon} title={`${senior.name}'s detected position`}>
           <Popup autoPan={false}><p className="font-bold">{senior.name}</p><p>{status}</p><p>{zoneStatus}</p><p>GPS detected: {new Date(senior.positionAt).toLocaleString()}</p></Popup>
         </Marker>}
-        <MapControls position={position} bounds={bounds}/>
+        <MapControls position={position} locations={locations}/>
       </MapContainer>
     </section>
     <section className="nature-map-status nature-glass" aria-label="Location and watch status">
-      <div className="nature-map-status__location"><span className="nature-map-status__shield"><Shield aria-hidden="true"/></span><div><p className={`nature-map-status__label${!state.live ? ' nature-text-waiting' : !state.inside ? ' nature-text-alert' : ''}`}>{zoneStatus}</p><p className="nature-map-status__place">{state.hub?.name || senior.safeZone?.name || DEFAULT_SAFE_ZONE_NAME}</p><Freshness>{state.freshness}</Freshness></div></div>
+      <div className="nature-map-status__location"><span className="nature-map-status__shield"><Shield aria-hidden="true"/></span><div><p className={`nature-map-status__label${!state.live ? ' nature-text-waiting' : !state.inside ? ' nature-text-alert' : ''}`}>{zoneStatus}</p><p className="nature-map-status__place">{state.location?.name || DEFAULT_SAFE_ZONE_NAME}</p><Freshness>{state.freshness}</Freshness></div></div>
       <div className="nature-map-status__battery"><Battery aria-hidden="true"/><div><span>Watch battery</span><strong>{telemetry.battery_percent == null ? '—' : `${telemetry.battery_percent}%`}</strong></div></div>
     </section>
-    <FamilySafeZoneEditor client={client} senior={senior} onSaved={onSafeZoneSaved} onReload={onReloadSafeZone}/>
+    <FamilySafeZoneEditor client={client} senior={senior} onSaved={onSafeLocationSaved} onReload={onReloadSafeLocations}/>
     <LocationHistory key={senior.deviceId} client={client} deviceId={senior.deviceId} name={senior.name}/>
     <details className="nature-location__details nature-glass"><summary>GPS and watch details</summary><p>{status}</p><p>{state.known ? `Lat: ${senior.position.lat.toFixed(5)}, Lng: ${senior.position.lng.toFixed(5)}` : 'Waiting for the first valid position'}</p><p>GPS detected: {state.known ? new Date(senior.positionAt).toLocaleString() : 'Not available'}</p><p>Watch update: {locationAge(telemetry.created_at, now)}</p></details>
   </div>;

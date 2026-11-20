@@ -108,6 +108,7 @@
 .nature-map-controls { position: absolute; top: 12px; right: 12px; z-index: 1000; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .nature-map-controls button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; min-width: 126px; padding: 8px 12px; border: 1px solid #fff; border-radius: 14px; background: #fcfffaf5; color: #173149; font: inherit; font-size: 11px; font-weight: 600; box-shadow: 0 4px 14px #132c3114; cursor: pointer; }
 .nature-map-controls svg { width: 17px; height: 17px; color: #009974; }
+.nature-map-controls select { min-height: 38px; max-width: 165px; padding: 6px 10px; border: 1px solid #fff; border-radius: 14px; color: #173149; background: #fcfffaf5; font: inherit; font-size: 11px; font-weight: 600; }
 .nature-map-controls button:last-child svg { color: #2274f2; }
 .nature-location__map .leaflet-control-zoom { border: 1px solid #fffffff0; border-radius: 13px; overflow: hidden; margin: 12px; box-shadow: 0 3px 13px #123d3014; }
 .nature-location__map .leaflet-control-zoom a { width: 32px; height: 32px; line-height: 32px; color: #13304a; background: #fffffff2; }

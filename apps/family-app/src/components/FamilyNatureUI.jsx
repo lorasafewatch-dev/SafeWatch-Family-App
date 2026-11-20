@@ -5,7 +5,7 @@ import SeniorPhoto from '../../../shared/components/SeniorPhoto.jsx';
 import { isLiveFamilyLocation, locationAge } from '../../../shared/gpsLocation.js';
 import { isValidGpsPoint } from '../../../shared/gpsStatus.js';
 import { familyZoneContains } from '../../../shared/familySafeZone.js';
-import { trustedHubAt } from '../../../shared/trustedHubs.js';
+import { safeLocationAt } from '../../../shared/trustedHubs.js';
 import seniorAvatar from '../assets/senior-nature.svg';
 import '../nature-glass.css';
 import NotificationBell from '../../../shared/components/NotificationBell.jsx';
@@ -15,12 +15,12 @@ export { seniorAvatar };
 export function locationPresentation(senior, now, urgent = false) {
   const known = isValidGpsPoint(senior.position);
   const live = known && isLiveFamilyLocation(senior, now);
-  const inZone = known && familyZoneContains(senior.position, senior.safeZone);
-  const hub = known && !inZone ? trustedHubAt(senior.position, senior.safeZone, senior.trustedHubs) : null;
-  const inside = inZone || !!hub;
-  return { known, live, inside, hub,
+  const inZone = known && familyZoneContains(senior.position, null);
+  const location = known && !inZone ? safeLocationAt(senior.position, senior.safeLocations) : null;
+  const inside = inZone || !!location;
+  return { known, live, inside, location,
     tone: urgent ? 'alert' : !live ? 'waiting' : inside ? 'safe' : 'alert',
-    label: urgent ? 'Safety alert' : !known ? 'Waiting for GPS' : !live ? 'Last known location' : hub ? 'At a trusted hub' : inside ? 'Inside safe zone' : 'Outside safe zone',
+    label: urgent ? 'Safety alert' : !known ? 'Waiting for GPS' : !live ? 'Last known location' : location ? 'At a safe location' : inside ? 'Inside San Isidro East' : 'Outside monitored areas',
     freshness: known ? `${live ? 'Updated' : 'Last GPS'} ${locationAge(senior.positionAt, now)}` : 'No location recorded',
   };
 }

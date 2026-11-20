@@ -37,9 +37,12 @@ export default function AccountMfaGate({ client, access, error, onVerified, clas
           </label>
           <button disabled={busy} className="w-full rounded-xl bg-emerald-600 p-3 font-bold text-white disabled:opacity-50">{busy ? 'Verifying…' : 'Verify and continue'}</button>
         </form> : <p role="alert" className="text-sm text-red-700">This account requires another verification method. Use your supported sign-in method or contact your administrator.</p>}
-      </> : <><p role="alert" className="text-sm text-red-700">{error}</p><button onClick={onVerified} className="font-bold text-emerald-700 underline">Retry account check</button></>}
+      </> : <p role="alert" className="text-sm text-red-700">{error}</p>}
       {message && <p role="alert" className="text-sm text-red-700">{message}</p>}
-      <button disabled={busy} onClick={() => setLogoutRequested(true)} className="text-sm text-slate-600 underline">Sign out</button>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {!access && <button type="button" onClick={onVerified} className="min-h-11 font-bold text-emerald-700 underline">Retry account check</button>}
+        <button type="button" disabled={busy} onClick={() => setLogoutRequested(true)} className="min-h-11 text-sm text-slate-600 underline">Sign out</button>
+      </div>
     </section>
     {logoutRequested && <LogoutConfirmation client={client} app={app} onCancel={() => setLogoutRequested(false)}/>}
   </div>;

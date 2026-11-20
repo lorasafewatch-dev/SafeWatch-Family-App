@@ -58,7 +58,7 @@ export function authFlowError(error) {
 
 const recoveryClients = new WeakMap();
 const recoveryKey = 'safewatch.password-recovery.v1';
-const sessionId = session => {
+export const sessionId = session => {
   try { return JSON.parse(atob(session.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id || null; }
   catch { return null; }
 };

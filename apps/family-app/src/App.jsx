@@ -45,7 +45,7 @@ function App({ client } = {}) {
   const [logoutRequested, setLogoutRequested] = useState(false);
   const contentRef = React.useRef(null);
   const [startupComplete, setStartupComplete] = useState(false);
-  const { isLoggedIn, isLoadingAuth, userId, accountUser, pendingAccess, accessDenied, recoveryAccess, recoveryLink, authLinkError, authNotice, setAuthNotice, authError, retryAuth, privacyRequired, privacyError } = useAccountSession(supabase, 'family');
+  const { isLoggedIn, isLoadingAuth, reconnectingAuth, userId, accountUser, pendingAccess, accessDenied, recoveryAccess, recoveryLink, authLinkError, authNotice, setAuthNotice, authError, retryAuth, privacyRequired, privacyError } = useAccountSession(supabase, 'family');
   const push = useFamilyPush(supabase, isLoadingAuth ? undefined : isLoggedIn ? userId : null);
   const [pushTargetId, setPushTargetId] = useState(() => sosIdFromUrl(window.location.href));
   const [pushIncident, setPushIncident] = useState(null);
@@ -727,6 +727,7 @@ function App({ client } = {}) {
         </div>}
         {sosNotice && linkedSeniors.some(item => item.id === sosNotice.deviceId) && <div role="status" className="sos-response-notice"><p>{sosNotice.message}</p><button type="button" onClick={() => { setView('alerts'); setSosNotice(null); }} className="mt-2 font-bold underline">View SOS updates</button><button type="button" onClick={() => setSosNotice(null)} className="ml-4 mt-2 underline">Dismiss</button></div>}
         <FamilyBrand onAlerts={() => setView('alerts')} alertCount={familyAlerts.length} notifications={{ app: 'family', userId, alerts: familyAlerts, responses: sosResponses, requests: accessNotifications.requests, loading: notificationsLoading, blocked: !!popupAlert, error: [notificationsError, sosResponsesError, accessNotifications.error].filter(Boolean).join(' '), onRefresh: () => { fetchFamilyAlerts(); accessNotifications.refresh(); }, onOpenNotification: item => { if (item.category === 'access') { setView('seniors'); return; } setView('alerts'); if (item.active) setPopupKey(item.incident.key); else setNotificationDetails(item.incident); } }}/>
+        {reconnectingAuth && <p role="status" className="nature-notice">Reconnecting to SafeWatch. Some readings may be delayed.</p>}
         {view === 'dashboard' && <SosNotificationSettings push={push} compact/>}
         {!['profile', 'seniors'].includes(view) && linkedSeniors.length > 0 && <div className="nature-manage-watches"><button type="button" onClick={() => setView('seniors')}>Manage watches</button></div>}
         {view !== 'profile' && seniorListError && <p role="alert" className="nature-notice">{seniorListError}</p>}

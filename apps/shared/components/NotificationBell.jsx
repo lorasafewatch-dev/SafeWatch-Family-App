@@ -71,6 +71,7 @@ export default function NotificationBell({ app = 'family', userId, alerts = [], 
 
   const markRead = keys => setReadIds(previous => markNotificationsRead(previous, keys, storage(), storageKey));
   const openItem = item => { markRead([item.key]); close(); onOpenNotification?.(item); };
+  const horizontalPosition = app === 'family' ? { insetInline: 0, marginInline: 'auto' } : { right: anchor.right };
   return <>
     <button type="button" ref={trigger} disabled={blocked} className={`watch-notification-bell ${className}`} aria-label={`Notifications (${unreadCount} unread)`} aria-expanded={open && !blocked} aria-haspopup="dialog" aria-controls={open && !blocked ? id : undefined} onClick={() => {
       const bounds = trigger.current.getBoundingClientRect();
@@ -80,7 +81,7 @@ export default function NotificationBell({ app = 'family', userId, alerts = [], 
     {open && !blocked && createPortal(<div className="watch-notifications"><button type="button" tabIndex={-1} className="watch-notifications__backdrop" aria-label="Close notification panel" onClick={close}/>
       <NotificationPanel id={id} panelRef={panel} notifications={notifications} readIds={readIds} loading={loading} error={error} onClose={close} onOpen={openItem} onRefresh={onRefresh}
         onReadAll={() => markRead(notifications.map(item => item.key))} onViewAll={() => { close(); onViewAll?.(); }}
-        style={{ top: anchor.top, right: anchor.right, maxHeight: `calc(100dvh - ${anchor.top+16}px)` }}/>
+        style={{ top: anchor.top, ...horizontalPosition, maxHeight: `calc(100dvh - ${anchor.top+16}px)` }}/>
     </div>, document.body)}
   </>;
 }

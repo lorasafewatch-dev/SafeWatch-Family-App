@@ -43,6 +43,13 @@ const EMPTY_SENIOR = { name: 'Loading...', age: '--', gender: '--',
 const RESPONSE_NOTICE_DURATION = 5 * 60 * 1000;
 const barangayNoticeKey = incident => [incident.id, barangaySosStage(incident)].join(':');
 
+function isOlderTelemetryPacket(packet, previous) {
+  if (!previous) return false;
+  const receivedAt = Date.parse(packet.created_at);
+  const previousReceivedAt = Date.parse(previous.created_at);
+  return receivedAt < previousReceivedAt || (receivedAt === previousReceivedAt && Number(packet.id) < Number(previous.id));
+}
+
 function App({ client } = {}) {
   const supabase = client || getFamilyClient();
   const [view, setView] = useState(() => new URL(window.location.href).searchParams.get('notification_test') === '1' ? 'profile' : 'dashboard');
@@ -93,6 +100,8 @@ function App({ client } = {}) {
   const lastGpsByDevice = React.useRef(new Map());
   const telemetryRequest = React.useRef(0);
   const telemetryBusy = React.useRef(false);
+  const latestTelemetryPacket = React.useRef(null);
+  const queuedRealtimePacket = React.useRef(null);
   const storageKey = userId ? `safewatch.family.alerts.v1:${userId}` : null;
   const selectionStorageKey = userId ? `safewatch.family.selected-senior.v1:${userId}` : null;
   const linkedIdKey = linkedSeniors.map(device => device.id).sort().join(',');
@@ -113,6 +122,8 @@ function App({ client } = {}) {
     lastGpsByDevice.current = new Map();
     telemetryRequest.current += 1;
     telemetryBusy.current = false;
+    latestTelemetryPacket.current = null;
+    queuedRealtimePacket.current = null;
     setSenior(EMPTY_SENIOR);
     setTelemetry(EMPTY_TELEMETRY);
     alertsRequest.current += 1;
@@ -210,6 +221,8 @@ function App({ client } = {}) {
     if (next !== initializedDevice.current || !next) {
       telemetryRequest.current += 1;
       telemetryBusy.current = false;
+      latestTelemetryPacket.current = null;
+      queuedRealtimePacket.current = null;
       setTelemetry(EMPTY_TELEMETRY);
       const device = devices.find(item => item.id === next);
       setSenior(device ? { ...EMPTY_SENIOR, name: device.patient_name, age: device.age ?? '--',
@@ -298,69 +311,83 @@ function App({ client } = {}) {
     return () => { clearInterval(timer); seniorListRequest.current += 1; seniorListBusy.current = false; };
   }, [isLoggedIn, userId]);
 
-  const fetchLiveTelemetry = async () => {
-    if (!isLoggedIn || !userId || telemetryBusy.current) return;
+  const fetchLiveTelemetry = async (packet = null) => {
+    if (!isLoggedIn || !userId) return;
     const device = linkedSeniorsRef.current.find(item => item.id === selectedDevice.current);
-    if (!device) return;
+    if (!device || (packet && packet.device_id !== device.id)) return;
+    if (telemetryBusy.current) {
+      if (packet && !isOlderTelemetryPacket(packet, queuedRealtimePacket.current)) queuedRealtimePacket.current = packet;
+      return;
+    }
     telemetryBusy.current = true;
     const request = ++telemetryRequest.current;
+    const controller = new AbortController();
     try {
-      {
-
-        const { data: telList, error: telError } = await supabase
+      let latest = packet;
+      if (!latest) {
+        const { data, error } = await withRequestTimeout(supabase
           .from('telemetry')
           .select('*')
           .eq('device_id', device.id)
           .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (telError) throw telError;
-
-        const latest = telList && telList[0] ? telList[0] : null;
-        const packetTime = telemetryTimestamp(latest);
-
-        const observation = gpsObservation(latest);
-        let retained = retainGpsObservation(lastGpsByDevice.current.get(device.id), observation);
-        // Reloads can restore the last fix even after hours of zero/no-fix packets.
-        if (!retained && !lastGpsByDevice.current.has(device.id)) {
-          retained = await loadLastGpsObservation(supabase, device.id);
-        }
-        if (request !== telemetryRequest.current) return;
-        lastGpsByDevice.current.set(device.id, retained);
-        const point = retained?.point || null;
-        const latestHasGpsFix = !!observation && observation.observedAt === retained?.observedAt;
-
-        // Clean device_name by stripping [MUTED] tag before parsing
-        const cleanedName = (device.device_name || '').replace(/\s*\[MUTED\]/g, '').trim();
-        // Parse gender and age from device_name format: "Name (Gender)" or "Name (Gender) (Age)"
-        const nameParts = cleanedName.split(' (');
-        const gender = device.gender || (nameParts.length > 1 ? nameParts[1].replace(')', '').trim() : 'Not specified');
-        const age = device.age ?? (nameParts.length > 2 ? nameParts[2].replace(')', '').trim() : '--');
-
-        setSenior({
-          name: device.patient_name,
-          age: age,
-          gender: gender,
-          deviceId: device.id,
-          location: point ? `Lat: ${point.lat.toFixed(4)}, Lng: ${point.lng.toFixed(4)}` : 'No GPS location recorded',
-          latestHasGpsFix,
-          position: point,
-          positionAt: retained?.observedAt || null,
-        });
-
-          setTelemetry(latest ? {
-            heart_rate: latest.heart_rate || null,
-            spo2: latest.spo2 || null,
-            battery_percent: latest.battery_percent,
-            is_sos: latest.is_sos,
-            location: observation ? `POINT(${observation.point.lng} ${observation.point.lat})` : null,
-            created_at: packetTime
-          } : EMPTY_TELEMETRY);
+          .limit(1).abortSignal(controller.signal), 8000, 'Loading the latest watch data took too long.');
+        if (error) throw error;
+        latest = data?.[0] || null;
       }
-    } catch (e) {
-      console.error("Error loading family app telemetry:", e);
+      const previous = latestTelemetryPacket.current;
+      if (request !== telemetryRequest.current || (latest ? isOlderTelemetryPacket(latest, previous) : previous)) return;
+
+      const observation = gpsObservation(latest);
+      let retained = retainGpsObservation(lastGpsByDevice.current.get(device.id), observation);
+      let historyLoaded = false;
+      // Only the polling path looks up GPS history when the browser has no fix yet.
+      if (!packet && !retained && !lastGpsByDevice.current.has(device.id)) {
+        try {
+          retained = await withRequestTimeout(loadLastGpsObservation(supabase, device.id, controller.signal),
+            8000, 'Loading the last watch location took too long.');
+          historyLoaded = true;
+        } catch (error) {
+          if (request === telemetryRequest.current) console.error('Error loading the last watch location:', error);
+        }
+      }
+      if (request !== telemetryRequest.current) return;
+      latestTelemetryPacket.current = latest;
+      if (retained || historyLoaded) lastGpsByDevice.current.set(device.id, retained);
+      const point = retained?.point || null;
+      const latestHasGpsFix = !!observation && observation.observedAt === retained?.observedAt;
+
+      // Older registrations stored gender and age in the watch name.
+      const nameParts = (device.device_name || '').replace(/\s*\[MUTED\]/g, '').trim().split(' (');
+      const gender = device.gender || (nameParts.length > 1 ? nameParts[1].replace(')', '').trim() : 'Not specified');
+      const age = device.age ?? (nameParts.length > 2 ? nameParts[2].replace(')', '').trim() : '--');
+      setSenior({
+        name: device.patient_name,
+        age,
+        gender,
+        deviceId: device.id,
+        location: point ? `Lat: ${point.lat.toFixed(4)}, Lng: ${point.lng.toFixed(4)}` : 'No GPS location recorded',
+        latestHasGpsFix,
+        position: point,
+        positionAt: retained?.observedAt || null,
+      });
+      setTelemetry(latest ? {
+        heart_rate: latest.heart_rate || null,
+        spo2: latest.spo2 || null,
+        battery_percent: latest.battery_percent,
+        is_sos: latest.is_sos,
+        location: observation ? `POINT(${observation.point.lng} ${observation.point.lat})` : null,
+        created_at: telemetryTimestamp(latest),
+      } : EMPTY_TELEMETRY);
+    } catch (error) {
+      if (request === telemetryRequest.current) console.error('Error loading family app telemetry:', error);
     } finally {
-      if (request === telemetryRequest.current) telemetryBusy.current = false;
+      controller.abort();
+      if (request === telemetryRequest.current) {
+        telemetryBusy.current = false;
+        const queued = queuedRealtimePacket.current;
+        queuedRealtimePacket.current = null;
+        if (queued) fetchLiveTelemetry(queued);
+      }
     }
   };
 
@@ -562,11 +589,13 @@ function App({ client } = {}) {
     document.addEventListener('visibilitychange', refreshVisible);
     window.addEventListener('online', refreshVisible);
 
-    const subscription = supabase
-      .channel('public:telemetry')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry' }, () => {
-        fetchLiveTelemetry();
-      })
+    const subscription = supabase.channel('public:telemetry');
+    if (selectedDeviceId) {
+      subscription.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'telemetry', filter: `device_id=eq.${selectedDeviceId}` }, ({ new: packet } = {}) => {
+        if (packet) fetchLiveTelemetry(packet);
+      });
+    }
+    subscription
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, () => {
         fetchFamilyAlerts(true);
       })
@@ -578,6 +607,7 @@ function App({ client } = {}) {
     return () => {
       telemetryRequest.current += 1;
       telemetryBusy.current = false;
+      queuedRealtimePacket.current = null;
       alertsRequest.current += 1;
       alertsBusy.current = false;
       pendingAlertRefresh.current = false;

@@ -39,12 +39,13 @@ export function retainGpsObservation(previous, incoming) {
     ? incoming : previous;
 }
 
-export async function loadLastGpsObservation(client, deviceId) {
-  const { data, error } = await client.from('telemetry').select('*')
+export async function loadLastGpsObservation(client, deviceId, signal) {
+  const query = client.from('telemetry').select('*')
     .eq('device_id', deviceId)
     // SQL <> also excludes NULL, so a single filter skips all no-fix packets.
     .neq('location', 'SRID=4326;POINT(0 0)')
     .order('created_at', { ascending: false }).limit(20);
+  const { data, error } = await (signal ? query.abortSignal(signal) : query);
   if (error) throw error;
   return (data || []).reduce((last, record) => retainGpsObservation(last, gpsObservation(record)), null);
 }

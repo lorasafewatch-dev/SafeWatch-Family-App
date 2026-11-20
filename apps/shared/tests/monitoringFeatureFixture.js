@@ -32,6 +32,7 @@ export function monitoringFeatureFixture(app) {
     lt(key, value) { this.filters.push(row => row[key] < value); return this; }
     neq(key, value) { this.filters.push(row => row[key] !== value); return this; }
     gt() { return this; } gte() { return this; } lte() { return this; }
+    abortSignal() { return this; }
     order(key, { ascending } = {}) { this.sort = { key, ascending }; return this; }
     limit(value) { this.maximum = value; return this; }
     insert(value) { this.add = value; return this; }
